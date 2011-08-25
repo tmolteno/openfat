@@ -18,12 +18,15 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef __FAT_H
-#define __FAT_H
+/* Boot Sector / BIOS Parameter Block definitions.
+ * Convenience functions for calculations.
+ */
+
+#ifndef __BPB_H
+#define __BPB_H
 
 #include <stdint.h>
-
-/* Boot Sector / BIOS Parameter Block definitions */
+#include "leaccess.h"
 
 /* Boot sector fields common to FAT12/FAT16/FAT32 */
 struct bpb_common {
@@ -74,55 +77,65 @@ struct bpb_fat32 {
 
 
 static inline uint32_t 
-fat_root_dir_sectors(struct bpb_common *bpb)
+_bpb_root_dir_sectors(struct bpb_common *bpb)
 {
-	return ((bpb->root_entry_count * 32) + (bpb->bytes_per_sector - 1)) /
-		bpb->bytes_per_sector;
+	return ((__get_le16(&bpb->root_entry_count) * 32) + 
+		(__get_le16(&bpb->bytes_per_sector) - 1)) /
+		__get_le16(&bpb->bytes_per_sector);
 }
 
 static inline uint32_t
-fat_size(struct bpb_common *bpb)
+_bpb_fat_size(struct bpb_common *bpb)
 {
-	return bpb->fat_size_16 ? bpb->fat_size_16 : 
-		((struct bpb_fat32 *)bpb)->fat_size_32;
+	uint32_t fat_size = __get_le16(&bpb->fat_size_16);
+	if(fat_size == 0)
+		fat_size = __get_le32(&((struct bpb_fat32 *)bpb)->fat_size_32);
+
+	return fat_size;
 }
 
 static inline uint32_t 
-fat_first_data_sector(struct bpb_common *bpb)
+_bpb_first_data_sector(struct bpb_common *bpb)
 {
-	return bpb->reserved_sector_count + (bpb->num_fats + fat_size(bpb)) 
-		+ fat_root_dir_sectors(bpb);
+	return __get_le16(&bpb->reserved_sector_count) + 
+		(bpb->num_fats + _bpb_fat_size(bpb)) 
+		+ _bpb_root_dir_sectors(bpb);
 }
 
 static inline uint32_t
-fat_first_sector_of_cluster(struct bpb_common *bpb, uint32_t n)
+_bpb_first_sector_of_cluster(struct bpb_common *bpb, uint32_t n)
 {
 	return ((n * 2) * bpb->sectors_per_cluster) + 
-		fat_first_data_sector(bpb);
+		_bpb_first_data_sector(bpb);
 }
 
 enum fat_type {
-	FAT12,
-	FAT16,
-	FAT32,
+	FAT_TYPE_FAT12,
+	FAT_TYPE_FAT16,
+	FAT_TYPE_FAT32,
 };
 
 /* FAT type is determined by count of clusters */
 static inline enum fat_type
 fat_type(struct bpb_common *bpb)
 {
-	uint32_t tot_sec = bpb->total_sectors_16 ?  bpb->total_sectors_16 :
-			bpb->total_sectors_32;
-	uint32_t data_sec = tot_sec - (bpb->reserved_sector_count + (bpb->num_fats * fat_size(bpb)) + fat_root_dir_sectors(bpb));
+	uint32_t tot_sec = __get_le16(&bpb->total_sectors_16);
+	if(tot_sec == 0)
+		tot_sec = __get_le32(&bpb->total_sectors_32);
+
+	uint32_t data_sec = tot_sec - 
+		__get_le16(&bpb->reserved_sector_count) - 
+		(bpb->num_fats * _bpb_fat_size(bpb)) - 
+		_bpb_root_dir_sectors(bpb);
 
 	uint32_t cluster_count = data_sec / bpb->sectors_per_cluster;
 
 	if(cluster_count < 4085) {
-		return FAT12;
+		return FAT_TYPE_FAT12;
 	} else if(cluster_count < 65525) {
-		return FAT16;
+		return FAT_TYPE_FAT16;
 	} 
-	return FAT32;
+	return FAT_TYPE_FAT32;
 }
 
 #endif
