@@ -37,6 +37,7 @@ struct block_device_file {
 
 uint16_t file_get_sector_size(struct block_device *dev)
 {
+	(void)dev;
 	return FILE_SECTOR_SIZE;
 }
 
@@ -67,5 +68,13 @@ struct block_device * block_device_file_new(const char *filename, const char *mo
 	dev->file = f;
 
 	return (struct block_device*)dev;
+}
+
+void block_device_file_destroy(struct block_device *bldev)
+{
+	struct block_device_file *dev = (void*)bldev;
+
+	fclose(dev->file);
+	free(dev);
 }
 

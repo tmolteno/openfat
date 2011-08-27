@@ -98,21 +98,21 @@ static inline uint32_t
 _bpb_first_data_sector(struct bpb_common *bpb)
 {
 	return __get_le16(&bpb->reserved_sector_count) + 
-		(bpb->num_fats + _bpb_fat_size(bpb)) 
+		(bpb->num_fats * _bpb_fat_size(bpb)) 
 		+ _bpb_root_dir_sectors(bpb);
 }
 
 static inline uint32_t
 _bpb_first_sector_of_cluster(struct bpb_common *bpb, uint32_t n)
 {
-	return ((n * 2) * bpb->sectors_per_cluster) + 
+	return ((n - 2) * bpb->sectors_per_cluster) + 
 		_bpb_first_data_sector(bpb);
 }
 
 enum fat_type {
-	FAT_TYPE_FAT12,
-	FAT_TYPE_FAT16,
-	FAT_TYPE_FAT32,
+	FAT_TYPE_FAT12 = 12,
+	FAT_TYPE_FAT16 = 16,
+	FAT_TYPE_FAT32 = 32,
 };
 
 /* FAT type is determined by count of clusters */
