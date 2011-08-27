@@ -20,6 +20,10 @@
 
 /* FAT Directory entry definitions.
  */
+#ifndef __DIRENTRY_H
+#define __DIRENTRY_H
+
+#include <stdint.h>
 
 #define FAT_ATTR_READ_ONLY	0x01
 #define FAT_ATTR_HIDDEN		0x02
@@ -43,4 +47,6 @@ struct fat_dirent {
 	uint16_t cluster_lo;
 	uint32_t size;
 } __attribute__((packed));
+
+#endif
 
