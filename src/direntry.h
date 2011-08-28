@@ -48,5 +48,28 @@ struct fat_dirent {
 	uint32_t size;
 } __attribute__((packed));
 
+
+#define FAT_LAST_LONG_ENTRY 0x40
+
+/* W95 long file name entries.  Characters are in UTF-16. */
+struct fat_ldirent {
+	uint8_t ord;
+	uint16_t name1[5];
+	uint8_t attr;
+	uint8_t type;
+	uint8_t checksum;
+	uint16_t name2[6];
+	uint16_t cluster_lo;
+	uint16_t name3[2];
+} __attribute__((packed));
+
+struct dirent {
+	char d_name[256];
+	struct fat_dirent fatent;
+};
+
+struct fat_file_handle;
+int fat_dir_read(struct fat_file_handle *dir, struct dirent *ent);
+
 #endif
 

@@ -22,6 +22,8 @@
  * Implementation of abstract block device over a Unix file
  */
 
+#define _FILE_OFFSET_BITS 64
+
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -46,7 +48,7 @@ int file_read_sectors(const struct block_device *bldev,
 {
 	const struct block_device_file *dev = (void*)bldev;
  
-	fseek(dev->file, sector * FILE_SECTOR_SIZE, SEEK_SET);
+	fseeko(dev->file, (uint64_t)sector * FILE_SECTOR_SIZE, SEEK_SET);
 	return fread(buf, FILE_SECTOR_SIZE, count, dev->file);
 }
 
