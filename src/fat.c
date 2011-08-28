@@ -23,7 +23,6 @@
 
 #include <stdint.h>
 #include <string.h>
-#include <stdlib.h>
 
 #include "blockdev.h"
 #include "leaccess.h"
@@ -51,6 +50,10 @@ int fat_init(struct block_device *dev, struct fat_handle *h)
 	if(h->type == FAT_TYPE_FAT32) {
 		struct bpb_fat32 *bpb32 = (void *)&sector_buf;
 		h->fat32.root_cluster = __get_le32(&bpb32->root_cluster);
+	} else {
+		h->fat12_16.root_sector_count = _bpb_root_dir_sectors(bpb);
+		h->fat12_16.root_first_sector = _bpb_first_data_sector(bpb) - 
+					h->fat12_16.root_sector_count;
 	}
 
 	return 0;
@@ -61,22 +64,39 @@ static uint32_t fat_get_next_cluster(struct fat_handle *h, uint32_t cluster)
 	uint32_t offset;
 	uint32_t sector;
 
-	if(h->type == FAT_TYPE_FAT16)
+	if(h->type == FAT_TYPE_FAT12)
+		offset = cluster + (cluster / 2);
+	else if(h->type == FAT_TYPE_FAT16)
 		offset = cluster * 2;
 	else if(h->type == FAT_TYPE_FAT32)
 		offset = cluster * 4;
-	else
-		abort();
 
 	sector = h->reserved_sector_count + (offset / h->bytes_per_sector);
 	offset %= h->bytes_per_sector;
 
 	block_read_sectors(h->dev, sector, 1, sector_buf); 
 
-	if(h->type == FAT_TYPE_FAT16)
+	if(h->type == FAT_TYPE_FAT12) {
+		uint32_t next;
+		if(offset == (uint32_t)h->bytes_per_sector - 1) {
+			/* Fat entry is over sector boundary */
+			next = sector_buf[offset];
+			block_read_sectors(h->dev, sector + 1, 1, sector_buf); 
+			next += sector_buf[0] << 8;
+		} else {
+			next = __get_le16((uint16_t*)(sector_buf + offset));
+		}
+		if(cluster & 1) 
+			return next >> 4;
+		else
+			return next & 0xFFF;
+	} else if(h->type == FAT_TYPE_FAT16) {
 		return __get_le16((uint16_t*)(sector_buf + offset));
-	else
+	} else if(h->type == FAT_TYPE_FAT32) {
 		return __get_le32((uint32_t*)(sector_buf + offset)) & 0x0FFFFFFF;
+	}
+	/* We shouldn't get here... */
+	return 0;
 }
 
 static inline uint32_t
@@ -110,7 +130,9 @@ int fat_file_init(struct fat_handle *fat, struct fat_dirent *dirent,
 			h->first_cluster = fat->fat32.root_cluster;
 		} else {
 			/* FAT12/FAT16 root directory */
-			abort();
+			h->root_flag = 1;
+			h->first_cluster = fat->fat12_16.root_first_sector;
+			h->size = h->fat->fat12_16.root_sector_count * h->fat->bytes_per_sector;
 		}
 	} else {
 		h->first_cluster = ((uint32_t)__get_le16(&dirent->cluster_hi) << 16) | 
@@ -133,11 +155,19 @@ void fat_file_rewind(struct fat_file_handle *h)
 int fat_file_read(struct fat_file_handle *h, void *buf, int size)
 {
 	int i;
+	uint32_t sector;
+	uint16_t offset;
+
 	if(h->cur_cluster == fat_eoc(h->fat)) 
 		return 0;
-	uint32_t sector = fat_first_sector_of_cluster(h->fat, h->cur_cluster);
-	sector += (h->position / h->fat->bytes_per_sector) % h->fat->sectors_per_cluster;
-	uint16_t offset = h->position % h->fat->bytes_per_sector;
+
+	if(h->root_flag) {
+		sector = h->cur_cluster;
+	} else {
+		sector = fat_first_sector_of_cluster(h->fat, h->cur_cluster);
+		sector += (h->position / h->fat->bytes_per_sector) % h->fat->sectors_per_cluster;
+	}
+	offset = h->position % h->fat->bytes_per_sector;
 	if(h->size && ((h->position + size) > h->size))
 		size = h->size - h->position;
 
@@ -152,6 +182,8 @@ int fat_file_read(struct fat_file_handle *h, void *buf, int size)
 			break;
 		offset = 0;
 		sector++;
+		if(h->root_flag) 
+			continue;
 		if((sector % h->fat->sectors_per_cluster) == 0) {
 			/* Go to next cluster... */
 			h->cur_cluster = fat_get_next_cluster(h->fat, 

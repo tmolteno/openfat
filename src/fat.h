@@ -32,7 +32,8 @@ struct fat_file_handle {
 	uint32_t first_cluster;
 	/* Internal state information */
 	uint32_t position;
-	uint32_t cur_cluster;
+	uint32_t cur_cluster;	/* This is used for sector on FAT12/16 root */
+	uint8_t root_flag;	/* Flag to mark root directory on FAT12/FAT16 */
 };
 
 struct fat_handle {
@@ -49,9 +50,11 @@ struct fat_handle {
 		struct {
 			uint32_t root_cluster;
 		} fat32;
+		struct {
+			uint16_t root_sector_count;
+			uint16_t root_first_sector;
+		} fat12_16;
 	};
-	/* Interal state information */
-	struct fat_file_handle current_dir;
 };
 
 int fat_init(struct block_device *dev, struct fat_handle *h);
