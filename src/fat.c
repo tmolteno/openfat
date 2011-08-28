@@ -34,7 +34,7 @@
 
 static uint8_t sector_buf[MAX_SECTOR_SIZE];
 
-int fat_init(struct block_device *dev, struct fat_handle *h)
+int fat_vol_init(const struct block_device *dev, struct fat_vol_handle *h)
 {
 	struct bpb_common *bpb = (void *)&sector_buf;
 
@@ -59,7 +59,8 @@ int fat_init(struct block_device *dev, struct fat_handle *h)
 	return 0;
 }
 
-static uint32_t fat_get_next_cluster(struct fat_handle *h, uint32_t cluster)
+static uint32_t 
+fat_get_next_cluster(const struct fat_vol_handle *h, uint32_t cluster)
 {
 	uint32_t offset;
 	uint32_t sector;
@@ -100,7 +101,7 @@ static uint32_t fat_get_next_cluster(struct fat_handle *h, uint32_t cluster)
 }
 
 static inline uint32_t
-fat_eoc(struct fat_handle *fat) 
+fat_eoc(const struct fat_vol_handle *fat) 
 {
 	switch (fat->type) {
 	case FAT_TYPE_FAT12:
@@ -114,12 +115,13 @@ fat_eoc(struct fat_handle *fat)
 }
 
 static inline uint32_t 
-fat_first_sector_of_cluster(struct fat_handle *fat, uint32_t n)
+fat_first_sector_of_cluster(const struct fat_vol_handle *fat, uint32_t n)
 {
 	return ((n - 2) * fat->sectors_per_cluster) + fat->first_data_sector;
 }
 
-int fat_file_init(struct fat_handle *fat, struct fat_dirent *dirent, 
+int fat_file_init(const struct fat_vol_handle *fat, 
+		const struct fat_dirent *dirent, 
 		struct fat_file_handle *h)
 {
 	memset(h, 0, sizeof(*h));
@@ -145,10 +147,25 @@ int fat_file_init(struct fat_handle *fat, struct fat_dirent *dirent,
 	return 0;
 }
 
-void fat_file_rewind(struct fat_file_handle *h)
+void fat_file_seek(struct fat_file_handle *h, uint32_t offset)
 {
-	h->position = 0;
 	h->cur_cluster = h->first_cluster;
+
+	if(h->size && (offset > h->size))
+		offset = h->size;
+
+	h->position = offset;
+
+	if(h->root_flag) { /* FAT12/16 root dir isn't a cluster chain */
+		return;
+	}
+
+	/* Interate over cluster chain to find cluster */
+	while(offset >= (h->fat->sectors_per_cluster * h->fat->bytes_per_sector)) {
+		h->cur_cluster = fat_get_next_cluster(h->fat, h->cur_cluster);
+		offset -= h->fat->sectors_per_cluster * h->fat->bytes_per_sector;
+	}
+
 }
 
 #define MIN(x, y) (((x) < (y))?(x):(y))
@@ -162,7 +179,8 @@ int fat_file_read(struct fat_file_handle *h, void *buf, int size)
 		return 0;
 
 	if(h->root_flag) {
-		sector = h->cur_cluster;
+		sector = h->cur_cluster + 
+			(h->position / h->fat->bytes_per_sector);
 	} else {
 		sector = fat_first_sector_of_cluster(h->fat, h->cur_cluster);
 		sector += (h->position / h->fat->bytes_per_sector) % h->fat->sectors_per_cluster;
@@ -182,7 +200,7 @@ int fat_file_read(struct fat_file_handle *h, void *buf, int size)
 			break;
 		offset = 0;
 		sector++;
-		if(h->root_flag) 
+		if(h->root_flag) /* FAT12/16 isn't a cluster chain */
 			continue;
 		if((sector % h->fat->sectors_per_cluster) == 0) {
 			/* Go to next cluster... */

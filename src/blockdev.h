@@ -29,11 +29,11 @@
 
 struct block_device {
 	/* Info about the device */
-	uint16_t (*get_sector_size)(struct block_device *dev);
+	uint16_t (*get_sector_size)(const struct block_device *dev);
 	/* ... more to be added as needed ... */
 
 	/* Actions on the device */
-	int (*read_sectors)(struct block_device *dev, 
+	int (*read_sectors)(const struct block_device *dev, 
 			uint32_t sector, uint32_t count, void *buf);
 	/* ... more to be added as needed ... */
 
@@ -42,13 +42,13 @@ struct block_device {
 
 /* Convenient wrapper functions */
 static inline uint16_t
-block_get_sector_size(struct block_device *dev)
+block_get_sector_size(const struct block_device *dev)
 {
 	return dev->get_sector_size(dev);
 }
 
 static inline int 
-block_read_sectors(struct block_device *dev,
+block_read_sectors(const struct block_device *dev,
 		uint32_t sector, uint32_t count, void *buf)
 {
 	return dev->read_sectors(dev, sector, count, buf);

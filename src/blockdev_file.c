@@ -35,16 +35,16 @@ struct block_device_file {
 	FILE *file;
 };
 
-uint16_t file_get_sector_size(struct block_device *dev)
+uint16_t file_get_sector_size(const struct block_device *dev)
 {
 	(void)dev;
 	return FILE_SECTOR_SIZE;
 }
 
-int file_read_sectors(struct block_device *bldev,
+int file_read_sectors(const struct block_device *bldev,
 		uint32_t sector, uint32_t count, void *buf)
 {
-	struct block_device_file *dev = (void*)bldev;
+	const struct block_device_file *dev = (void*)bldev;
  
 	fseek(dev->file, sector * FILE_SECTOR_SIZE, SEEK_SET);
 	return fread(buf, FILE_SECTOR_SIZE, count, dev->file);

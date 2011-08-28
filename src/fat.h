@@ -25,19 +25,8 @@
 
 #include "direntry.h"
 
-struct fat_file_handle {
-	struct fat_handle *fat;
-	/* Fields from dir entry */
-	uint32_t size;
-	uint32_t first_cluster;
-	/* Internal state information */
-	uint32_t position;
-	uint32_t cur_cluster;	/* This is used for sector on FAT12/16 root */
-	uint8_t root_flag;	/* Flag to mark root directory on FAT12/FAT16 */
-};
-
-struct fat_handle {
-	struct block_device *dev;
+struct fat_vol_handle {
+	const struct block_device *dev;
 	/* FAT type: 12, 16 or 32 */
 	int type;
 	/* Useful fields from BPB */
@@ -57,10 +46,21 @@ struct fat_handle {
 	};
 };
 
-int fat_init(struct block_device *dev, struct fat_handle *h);
-int fat_file_init(struct fat_handle *fat, struct fat_dirent *, 
+struct fat_file_handle {
+	const struct fat_vol_handle *fat;
+	/* Fields from dir entry */
+	uint32_t size;
+	uint32_t first_cluster;
+	/* Internal state information */
+	uint32_t position;
+	uint32_t cur_cluster;	/* This is used for sector on FAT12/16 root */
+	uint8_t root_flag;	/* Flag to mark root directory on FAT12/16 */
+};
+
+int fat_vol_init(const struct block_device *dev, struct fat_vol_handle *h);
+int fat_file_init(const struct fat_vol_handle *fat, const struct fat_dirent *, 
 		struct fat_file_handle *h);
-void fat_file_rewind(struct fat_file_handle *h);
+void fat_file_seek(struct fat_file_handle *h, uint32_t offset);
 int fat_file_read(struct fat_file_handle *h, void *buf, int size);
 
 #endif

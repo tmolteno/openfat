@@ -28,7 +28,7 @@
 
 #include <stdint.h>
 
-static inline uint16_t __get_le16(uint16_t *p)
+static inline uint16_t __get_le16(const uint16_t *p)
 {
 	return *(uint8_t *)p + (*((uint8_t *)p + 1) << 8);
 }
@@ -39,10 +39,10 @@ static inline void __put_le16(uint16_t *p, uint16_t v)
 	*((uint8_t *)p + 1) = v >> 8;
 }
 
-static inline uint32_t __get_le32(uint32_t *p)
+static inline uint32_t __get_le32(const uint32_t *p)
 {
 	return __get_le16((uint16_t *)p) + 
-		(uint32_t)(__get_le16((uint16_t *)p + 1) << 16); 
+		(uint32_t)(__get_le16((const uint16_t *)p + 1) << 16); 
 }
 
 static inline void __put_le32(uint32_t *p, uint32_t v)
