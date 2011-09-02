@@ -1,1 +1,6 @@
 OpenFAT is a Fat filesystem code that integrates with libopenstm32
+
+src/    - Openfat library code
+unix/	- Examples for a Unix host
+stm32/	- Examples for an STM32 host using libopenstm32
+
