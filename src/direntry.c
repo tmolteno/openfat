@@ -24,6 +24,7 @@
 #include <string.h>
 #include <ctype.h>
 
+#include "leaccess.h"
 #include "fat.h"
 #include "direntry.h"
 
@@ -62,11 +63,11 @@ int fat_dir_read(struct fat_file_handle *dir, struct dirent *ent)
 			i = ((ld->ord & 0x3f) - 1) * 13;
 
 			for(j = 0; j < 5; j++) 
-				ent->d_name[i+j] = ld->name1[j];
+				ent->d_name[i+j] = __get_le16(&ld->name1[j]);
 			for(j = 0; j < 6; j++) 
-				ent->d_name[i+5+j] = ld->name2[j];
+				ent->d_name[i+5+j] = __get_le16(&ld->name2[j]);
 			for(j = 0; j < 2; j++) 
-				ent->d_name[i+11+j] = ld->name3[j];
+				ent->d_name[i+11+j] = __get_le16(&ld->name3[j]);
 
 			continue;
 		}
@@ -78,7 +79,7 @@ int fat_dir_read(struct fat_file_handle *dir, struct dirent *ent)
 			for(i = 0, j = 0; i < 11; i++, j++) {
 				ent->d_name[j] = tolower(ent->fatent.name[i]);
 				if(ent->fatent.name[i] == ' ') {
-					ent->d_name[j++] = '.';
+					ent->d_name[j++] = (ent->d_name[0] == '.') ? ' ' : '.';
 					while((ent->fatent.name[++i] == ' ') && (i < 11));
 				}
 			} 
