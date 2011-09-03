@@ -32,7 +32,7 @@
 /* Build time configuration */
 #define MAX_SECTOR_SIZE 512
 
-static uint8_t sector_buf[MAX_SECTOR_SIZE];
+uint8_t sector_buf[MAX_SECTOR_SIZE];
 
 int fat_vol_init(const struct block_device *dev, struct fat_vol_handle *h)
 {

@@ -26,7 +26,10 @@
 
 #include <stdint.h>
 
+#include "blockdev.h"
+
 struct mmc_port {
+	struct block_device bldev;
 	/* Physical hardware config */
 	uint32_t spi;
 	uint32_t cs_port;

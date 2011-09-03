@@ -30,6 +30,8 @@
 #include "mmc.h"
 #include "leaccess.h"
 
+#define MMC_SECTOR_SIZE		512
+
 static uint8_t spi_readwrite(uint32_t spi, uint8_t data)
 {
 	while(SPI_SR(spi) & SPI_SR_BSY);
@@ -38,14 +40,14 @@ static uint8_t spi_readwrite(uint32_t spi, uint8_t data)
 	return SPI_DR(spi);
 }
 
-static void mmc_select(struct mmc_port *mmc)
+static void mmc_select(const struct mmc_port *mmc)
 {
 	gpio_clear(mmc->cs_port, mmc->cs_pin);
 	/* Wait for not busy */
 	while(spi_readwrite(mmc->spi, 0xFF) == 0);
 }
 
-static void mmc_release(struct mmc_port *mmc)
+static void mmc_release(const struct mmc_port *mmc)
 {
 	gpio_set(mmc->cs_port, mmc->cs_pin);
 	/* Must cycle clock 8 times after CS is released */
@@ -53,21 +55,21 @@ static void mmc_release(struct mmc_port *mmc)
 }
 
 static void 
-mmc_write_buffer(struct mmc_port *mmc, const uint8_t *buf, int len)
+mmc_write_buffer(const struct mmc_port *mmc, const uint8_t *buf, int len)
 {
 	while(len--)
 		spi_readwrite(mmc->spi, *buf++);
 }
 
 static void 
-mmc_read_buffer(struct mmc_port *mmc, uint8_t *buf, int len)
+mmc_read_buffer(const struct mmc_port *mmc, uint8_t *buf, int len)
 {
 	while(len--)
 		*buf++ = spi_readwrite(mmc->spi, 0xFF);
 }
 
 static int
-mmc_receive_block(struct mmc_port *mmc, uint8_t *buf, int len)
+mmc_receive_block(const struct mmc_port *mmc, uint8_t *buf, int len)
 {
 	/* wait for token */
 	while((*buf = spi_readwrite(mmc->spi, 0xFF)) == 0xFF);
@@ -86,13 +88,17 @@ mmc_receive_block(struct mmc_port *mmc, uint8_t *buf, int len)
 }
 
 static uint8_t
-mmc_command(struct mmc_port *mmc, uint8_t cmd, uint32_t arg)
+mmc_command(const struct mmc_port *mmc, uint8_t cmd, uint32_t arg)
 {
 	uint8_t buf[6];
 	uint8_t ret;
 
 	buf[0] = cmd | 0x40;
-	__put_le32((uint32_t*)&buf[1], arg);
+	/* argument is packed big-endian */
+	buf[1] = (arg >> 24) & 0xFF;
+	buf[2] = (arg >> 16) & 0xFF;
+	buf[3] = (arg >> 8) & 0xFF;
+	buf[4] = arg & 0xFF;
 	buf[5] = (cmd == MMC_GO_IDLE_STATE) ? 0x95 : 1; /* CRC here */
 
 	mmc_select(mmc);
@@ -105,6 +111,29 @@ mmc_command(struct mmc_port *mmc, uint8_t cmd, uint32_t arg)
 	return ret;
 }
 
+static uint16_t mmc_get_sector_size(const struct block_device *dev)
+{
+	(void)dev;
+	return MMC_SECTOR_SIZE;
+}
+
+static int mmc_read_sectors(const struct block_device *bldev,
+		uint32_t sector, uint32_t count, void *buf)
+{
+	const struct mmc_port *mmc = (void*)bldev;
+ 
+	mmc_select(mmc);
+	while(count--) {
+		mmc_command(mmc, MMC_READ_SINGLE_BLOCK, 
+				sector * MMC_SECTOR_SIZE);
+		mmc_receive_block(mmc, buf, MMC_SECTOR_SIZE);
+		buf += MMC_SECTOR_SIZE;
+	}
+	mmc_release(mmc);
+
+	return 0;
+}
+
 int 
 mmc_init(uint32_t spi, uint32_t cs_port, uint16_t cs_pin, struct mmc_port *mmc)
 {
@@ -112,6 +141,10 @@ mmc_init(uint32_t spi, uint32_t cs_port, uint16_t cs_pin, struct mmc_port *mmc)
 
 	/* Intialise structure */
 	memset(mmc, 0, sizeof(*mmc));
+
+	/* Block device methods */
+	mmc->bldev.get_sector_size = mmc_get_sector_size;
+	mmc->bldev.read_sectors = mmc_read_sectors;
 
 	mmc->spi = spi;
 	mmc->cs_port = cs_port;

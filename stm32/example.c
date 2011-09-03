@@ -22,7 +22,14 @@
 #include <libopencm3/stm32/gpio.h>
 #include <libopencm3/stm32/spi.h>
 
+#include <stdlib.h>
+#include <stdio.h>
+
+#include "blockdev.h"
 #include "mmc.h"
+#include "mbr.h"
+#include "fat.h"
+#include "direntry.h"
 
 void stm32_setup(void)
 {
@@ -54,13 +61,48 @@ void stm32_setup(void)
 			GPIO3);
 }
 
+void print_tree(struct fat_file_handle *dir, int nest)
+{
+	struct dirent ent;
+
+	while(fat_dir_read(dir, &ent)) {
+		for(int i = 0; i < nest; i++) printf("\t");
+		printf("%02x - %s\n", ent.fatent.attr, ent.d_name);
+		
+		if((ent.fatent.attr == FAT_ATTR_DIRECTORY) && (ent.d_name[0] != '.')) {
+			struct fat_file_handle subdir;
+			fat_file_init(dir->fat, &ent.fatent, &subdir);
+			print_tree(&subdir, nest + 1);
+		}
+	}
+
+}
+
+int _write(int fd, char *buf, int len)
+{
+	return len;
+}
+
 int main(void)
 {
 	struct mmc_port spi2;
+	struct block_mbr_partition part;
+	struct block_device *bldev = (void*)&spi2;
+	struct block_device *blpart = (void*)&part;
+	struct fat_vol_handle fat;
+	struct fat_file_handle root;
 
 	stm32_setup();
 
 	mmc_init(SPI2, GPIOA, GPIO3, &spi2);
+	mbr_partition_init(&part, bldev, 0);
+
+	fat_vol_init(blpart, &fat);
+	fat_file_init(&fat, NULL, &root);
+
+	printf("Fat type is FAT%d\n", fat.type);
+
+	print_tree(&root, 0);
 
 	while (1) {
 	}
