@@ -59,8 +59,7 @@ int fat_vol_init(const struct block_device *dev, struct fat_vol_handle *h)
 	return 0;
 }
 
-static uint32_t 
-fat_get_next_cluster(const struct fat_vol_handle *h, uint32_t cluster)
+uint32_t fat_get_next_cluster(const struct fat_vol_handle *h, uint32_t cluster)
 {
 	uint32_t offset;
 	uint32_t sector;
@@ -98,26 +97,6 @@ fat_get_next_cluster(const struct fat_vol_handle *h, uint32_t cluster)
 	}
 	/* We shouldn't get here... */
 	return 0;
-}
-
-static inline uint32_t
-fat_eoc(const struct fat_vol_handle *fat) 
-{
-	switch (fat->type) {
-	case FAT_TYPE_FAT12:
-		return 0x0FF8;
-	case FAT_TYPE_FAT16:
-		return 0xFFF8;
-	case FAT_TYPE_FAT32:
-		return 0x0FFFFFF8;
-	}
-	return -1;
-}
-
-static inline uint32_t 
-fat_first_sector_of_cluster(const struct fat_vol_handle *fat, uint32_t n)
-{
-	return ((n - 2) * fat->sectors_per_cluster) + fat->first_data_sector;
 }
 
 void fat_file_root(const struct fat_vol_handle *fat, 
@@ -177,17 +156,15 @@ int fat_file_read(struct fat_file_handle *h, void *buf, int size)
 	uint32_t sector;
 	uint16_t offset;
 
-	if(h->cur_cluster == fat_eoc(h->fat)) 
-		return 0;
+	/* Refuse to read from a directory.  Use *readdir instead */
+	if(h->root_flag || (h->size == 0)) 
+		return 0; 
 
-	if(h->root_flag) {
-		sector = h->cur_cluster + 
-			(h->position / h->fat->bytes_per_sector);
-	} else {
-		sector = fat_first_sector_of_cluster(h->fat, h->cur_cluster);
-		sector += (h->position / h->fat->bytes_per_sector) % h->fat->sectors_per_cluster;
-	}
+	sector = fat_first_sector_of_cluster(h->fat, h->cur_cluster);
+	sector += (h->position / h->fat->bytes_per_sector) % h->fat->sectors_per_cluster;
 	offset = h->position % h->fat->bytes_per_sector;
+
+	/* Don't read past end of file */
 	if(h->size && ((h->position + size) > h->size))
 		size = h->size - h->position;
 

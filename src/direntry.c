@@ -25,6 +25,7 @@
 #include <ctype.h>
 
 #include "leaccess.h"
+#include "blockdev.h"
 #include "fat.h"
 #include "direntry.h"
 
@@ -39,13 +40,65 @@ uint8_t lfn_chksum(uint8_t *dosname)
 	return sum;
 }
 
-int fat_dir_read(struct fat_file_handle *dir, struct dirent *ent)
+/* Used to convert W95 UTF-16 filenames to ascii.
+ * Return values for multiple successive strings are bitwise or'ed together.
+ * 0 means terminating null reached.
+ * 1 means converted to end on input.
+ * 2 means conversion error.
+ */
+static int ascii_from_utf16(char *ascii, const uint16_t *utf16, int count)
+{
+	uint16_t tmp;
+	while(count--) {
+		tmp = __get_le16(utf16++);
+		if(tmp > 127) 
+			return 2;
+		*ascii++ = tmp;
+		if(tmp == 0)
+			return 0;
+	}
+	return 1;
+}
+
+int fat_dir_read(struct fat_file_handle *h, struct dirent *ent)
 {
 	uint16_t csum = -1;
+	uint32_t sector;
+	uint16_t offset;
 	int i, j;
 
-	while(fat_file_read(dir, &ent->fatent, 
-				sizeof(ent->fatent)) == sizeof(ent->fatent)) {
+	if(h->cur_cluster == fat_eoc(h->fat)) 
+		return 0;
+
+	if(h->root_flag) {
+		/* FAT12/FAT16 root directory */
+		sector = h->cur_cluster + 
+			(h->position / h->fat->bytes_per_sector);
+	} else {
+		sector = fat_first_sector_of_cluster(h->fat, h->cur_cluster);
+		sector += (h->position / h->fat->bytes_per_sector) % h->fat->sectors_per_cluster;
+	}
+	offset = h->position % h->fat->bytes_per_sector;
+	block_read_sectors(h->fat->dev, sector, 1, sector_buf); 
+
+	for(;; offset += 32) {
+		if(offset == h->fat->bytes_per_sector) {
+			sector++;
+			if(!h->root_flag && 
+			   ((sector % h->fat->sectors_per_cluster) == 0)) {
+				/* Go to next cluster... */
+				h->cur_cluster = fat_get_next_cluster(h->fat, 
+							h->cur_cluster);
+				if(h->cur_cluster == fat_eoc(h->fat)) 
+					return 0;
+				sector = fat_first_sector_of_cluster(h->fat, 
+							h->cur_cluster);
+			}
+			block_read_sectors(h->fat->dev, sector, 1, sector_buf);
+			offset = 0;
+		}
+		memcpy(&ent->fatent, sector_buf + offset, 32);
+		h->position += 32;
 
 		if(ent->fatent.name[0] == 0) 
 			return 0;	/* Empty entry, end of directory */
@@ -57,17 +110,20 @@ int fat_dir_read(struct fat_file_handle *dir, struct dirent *ent)
 				memset(ent->d_name, 0, sizeof(ent->d_name));
 				csum = ld->checksum;
 			} 
-			if(csum != ld->checksum) 
+			if(csum != ld->checksum) /* Abandon orphaned entry */
 				csum = -1;
 
 			i = ((ld->ord & 0x3f) - 1) * 13;
 
-			for(j = 0; j < 5; j++) 
-				ent->d_name[i+j] = __get_le16(&ld->name1[j]);
-			for(j = 0; j < 6; j++) 
-				ent->d_name[i+5+j] = __get_le16(&ld->name2[j]);
-			for(j = 0; j < 2; j++) 
-				ent->d_name[i+11+j] = __get_le16(&ld->name3[j]);
+			/* If entries can't be converted to ASCII, abandon
+			 * the long filename.  DOS 8.3 name will be returned.
+			 * Not pretty... */
+			switch(ascii_from_utf16(&ent->d_name[i], ld->name1, 5))
+				{ case 0: continue; case 2: csum = -1; }
+			switch(ascii_from_utf16(&ent->d_name[i+5], ld->name2, 6))
+				{ case 0: continue; case 2: csum = -1; }
+			switch(ascii_from_utf16(&ent->d_name[i+11], ld->name3, 2))
+				{ case 0: continue; case 2: csum = -1; }
 
 			continue;
 		}
@@ -79,10 +135,11 @@ int fat_dir_read(struct fat_file_handle *dir, struct dirent *ent)
 			for(i = 0, j = 0; i < 11; i++, j++) {
 				ent->d_name[j] = tolower(ent->fatent.name[i]);
 				if(ent->fatent.name[i] == ' ') {
-					ent->d_name[j++] = (ent->d_name[0] == '.') ? ' ' : '.';
+					ent->d_name[j] = (ent->d_name[0] == '.') ? ' ' : '.';
 					while((ent->fatent.name[++i] == ' ') && (i < 11));
 				}
 			} 
+			ent->d_name[j] = 0;
 		}
 
 		return 1;

@@ -23,7 +23,10 @@
 #ifndef __FAT_H
 #define __FAT_H
 
+#include "bpb.h"
 #include "direntry.h"
+
+extern uint8_t sector_buf[];
 
 struct fat_vol_handle {
 	const struct block_device *dev;
@@ -56,6 +59,29 @@ struct fat_file_handle {
 	uint32_t cur_cluster;	/* This is used for sector on FAT12/16 root */
 	uint8_t root_flag;	/* Flag to mark root directory on FAT12/16 */
 };
+
+static inline uint32_t
+fat_eoc(const struct fat_vol_handle *fat) 
+{
+	switch (fat->type) {
+	case FAT_TYPE_FAT12:
+		return 0x0FF8;
+	case FAT_TYPE_FAT16:
+		return 0xFFF8;
+	case FAT_TYPE_FAT32:
+		return 0x0FFFFFF8;
+	}
+	return -1;
+}
+
+static inline uint32_t 
+fat_first_sector_of_cluster(const struct fat_vol_handle *fat, uint32_t n)
+{
+	return ((n - 2) * fat->sectors_per_cluster) + fat->first_data_sector;
+}
+
+uint32_t 
+fat_get_next_cluster(const struct fat_vol_handle *h, uint32_t cluster);
 
 int fat_vol_init(const struct block_device *dev, struct fat_vol_handle *h);
 void fat_file_root(const struct fat_vol_handle *fat, struct fat_file_handle *h);
