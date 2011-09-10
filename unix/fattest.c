@@ -64,7 +64,7 @@ int main(int argc, char *argv[])
 	assert(bldev != NULL);
 
 	fat_vol_init(bldev, &fat);
-	fat_file_init(&fat, NULL, &root);
+	fat_file_root(&fat, &root);
 
 	printf("Fat type is FAT%d\n", fat.type);
 

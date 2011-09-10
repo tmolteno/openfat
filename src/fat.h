@@ -58,7 +58,8 @@ struct fat_file_handle {
 };
 
 int fat_vol_init(const struct block_device *dev, struct fat_vol_handle *h);
-int fat_file_init(const struct fat_vol_handle *fat, const struct fat_dirent *, 
+void fat_file_root(const struct fat_vol_handle *fat, struct fat_file_handle *h);
+void fat_file_init(const struct fat_vol_handle *fat, const struct fat_dirent *, 
 		struct fat_file_handle *h);
 void fat_file_seek(struct fat_file_handle *h, uint32_t offset);
 int fat_file_read(struct fat_file_handle *h, void *buf, int size);

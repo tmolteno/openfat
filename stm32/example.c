@@ -98,7 +98,7 @@ int main(void)
 	mbr_partition_init(&part, bldev, 0);
 
 	fat_vol_init(blpart, &fat);
-	fat_file_init(&fat, NULL, &root);
+	fat_file_root(&fat, &root);
 
 	printf("Fat type is FAT%d\n", fat.type);
 

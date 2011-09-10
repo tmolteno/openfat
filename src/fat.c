@@ -120,31 +120,33 @@ fat_first_sector_of_cluster(const struct fat_vol_handle *fat, uint32_t n)
 	return ((n - 2) * fat->sectors_per_cluster) + fat->first_data_sector;
 }
 
-int fat_file_init(const struct fat_vol_handle *fat, 
-		const struct fat_dirent *dirent, 
+void fat_file_root(const struct fat_vol_handle *fat, 
 		struct fat_file_handle *h)
 {
 	memset(h, 0, sizeof(*h));
 	h->fat = fat;
 
-	if(dirent == NULL) { /* special case to open the root directory */
-		if(fat->type == FAT_TYPE_FAT32) {
-			h->first_cluster = fat->fat32.root_cluster;
-		} else {
-			/* FAT12/FAT16 root directory */
-			h->root_flag = 1;
-			h->first_cluster = fat->fat12_16.root_first_sector;
-			h->size = h->fat->fat12_16.root_sector_count * h->fat->bytes_per_sector;
-		}
+	if(fat->type == FAT_TYPE_FAT32) {
+		h->first_cluster = fat->fat32.root_cluster;
 	} else {
-		h->first_cluster = ((uint32_t)__get_le16(&dirent->cluster_hi) << 16) | 
-				__get_le16(&dirent->cluster_lo);
-		h->size = __get_le32(&dirent->size);
+		/* FAT12/FAT16 root directory */
+		h->root_flag = 1;
+		h->first_cluster = fat->fat12_16.root_first_sector;
+		h->size = h->fat->fat12_16.root_sector_count * h->fat->bytes_per_sector;
 	}
-
 	h->cur_cluster = h->first_cluster;
+}
 
-	return 0;
+void fat_file_init(const struct fat_vol_handle *fat, 
+		const struct fat_dirent *dirent,
+		struct fat_file_handle *h)
+{
+	memset(h, 0, sizeof(*h));
+	h->fat = fat;
+	h->first_cluster = ((uint32_t)__get_le16(&dirent->cluster_hi) << 16) | 
+			__get_le16(&dirent->cluster_lo);
+	h->size = __get_le32(&dirent->size);
+	h->cur_cluster = h->first_cluster;
 }
 
 void fat_file_seek(struct fat_file_handle *h, uint32_t offset)
