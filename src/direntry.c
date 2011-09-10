@@ -29,6 +29,9 @@
 #include "fat.h"
 #include "direntry.h"
 
+#define LONG_NAME_SUPPORT
+
+#ifdef LONG_NAME_SUPPORT
 uint8_t lfn_chksum(uint8_t *dosname)
 {
 	uint8_t sum = 0;
@@ -41,7 +44,6 @@ uint8_t lfn_chksum(uint8_t *dosname)
 }
 
 /* Used to convert W95 UTF-16 filenames to ascii.
- * Return values for multiple successive strings are bitwise or'ed together.
  * 0 means terminating null reached.
  * 1 means converted to end on input.
  * 2 means conversion error.
@@ -60,9 +62,33 @@ static int ascii_from_utf16(char *ascii, const uint16_t *utf16, int count)
 	return 1;
 }
 
+/* Check ASCII and UTF-16 strings for equality.
+ * 0 means terminating null reached.
+ * 1 means matched to end on input.
+ * 2 means mitmatch or conversion error.
+ */
+static int 
+ascii_cmp_utf16(const char *ascii, const uint16_t *utf16, int count)
+{
+        while(count--) {
+                uint16_t u = __get_le16(utf16++);
+                /* Check for mismatch or non-ascii */
+                if((u > 127) || (toupper(*ascii) != toupper(u)))
+                        return 2;
+
+                /* Done on terminating null */
+                if(*ascii++ == 0) 
+                        return 0;
+        }
+        return 1;
+}
+#endif
+
 int fat_dir_read(struct fat_file_handle *h, struct dirent *ent)
 {
+#ifdef LONG_NAME_SUPPORT
 	uint16_t csum = -1;
+#endif
 	uint32_t sector;
 	uint16_t offset;
 	int i, j;
@@ -82,6 +108,7 @@ int fat_dir_read(struct fat_file_handle *h, struct dirent *ent)
 	block_read_sectors(h->fat->dev, sector, 1, sector_buf); 
 
 	for(;; offset += 32) {
+		/* Read next sector if needed */
 		if(offset == h->fat->bytes_per_sector) {
 			sector++;
 			if(!h->root_flag && 
@@ -105,6 +132,7 @@ int fat_dir_read(struct fat_file_handle *h, struct dirent *ent)
 		if(ent->fatent.name[0] == (char)0xe5)
 			continue;	/* Deleted entry */
 		if(ent->fatent.attr == FAT_ATTR_LONG_NAME) {
+#ifdef LONG_NAME_SUPPORT
 			struct fat_ldirent *ld = (void*)&ent->fatent;
 			if(ld->ord & FAT_LAST_LONG_ENTRY) {
 				memset(ent->d_name, 0, sizeof(ent->d_name));
@@ -124,14 +152,15 @@ int fat_dir_read(struct fat_file_handle *h, struct dirent *ent)
 				{ case 0: continue; case 2: csum = -1; }
 			switch(ascii_from_utf16(&ent->d_name[i+11], ld->name3, 2))
 				{ case 0: continue; case 2: csum = -1; }
-
+#endif
 			continue;
 		}
-
+#ifdef LONG_NAME_SUPPORT
 		if(csum != lfn_chksum((uint8_t*)ent->fatent.name)) 
 			ent->d_name[0] = 0;
 
 		if(ent->d_name[0] == 0) {
+#endif
 			for(i = 0, j = 0; i < 11; i++, j++) {
 				ent->d_name[j] = tolower(ent->fatent.name[i]);
 				if(ent->fatent.name[i] == ' ') {
@@ -139,10 +168,116 @@ int fat_dir_read(struct fat_file_handle *h, struct dirent *ent)
 					while((ent->fatent.name[++i] == ' ') && (i < 11));
 				}
 			} 
+			if((ent->d_name[0] != '.') && (ent->d_name[j-1] == '.'))
+				ent->d_name[j-1] = 0;
+
 			ent->d_name[j] = 0;
+#ifdef LONG_NAME_SUPPORT
 		}
+#endif
 
 		return 1;
+	}
+	return 0;
+}
+
+int fat_comparesfn(const char * name, const char *fatname)
+{
+	char canonname[11];
+	int i;
+	memset(canonname, ' ', sizeof(canonname));
+	if(name[0] == '.') {
+		/* Special case:
+		 * Only legal names are '.' and '..' */
+		memcpy(canonname, name, strlen(name));
+	} else for(i = 0; (i < 11) && *name; i++) {
+		if(*name == '.') {
+			if(i < 8) continue;
+			if(i == 8) name++;
+		}       
+		canonname[i] = toupper(*name++);
+	}
+	return (*name == 0) && !memcmp(canonname, fatname, 11);
+}
+
+int fat_dir_open_file(const struct fat_file_handle *dir, const char *name,
+		struct fat_file_handle *file)
+{
+#ifdef LONG_NAME_SUPPORT
+	uint16_t csum = -1;
+#endif
+	uint32_t cluster = 0;
+	uint32_t sector;
+	uint16_t offset = 0;
+
+	if(dir->root_flag) {
+		/* FAT12/FAT16 root directory */
+		sector = dir->first_cluster;
+	} else {
+		cluster = dir->first_cluster;
+		sector = fat_first_sector_of_cluster(dir->fat, cluster);
+	}
+	block_read_sectors(dir->fat->dev, sector, 1, sector_buf); 
+
+	for(;; offset += 32) {
+		/* Read next sector if needed */
+		if(offset == dir->fat->bytes_per_sector) {
+			sector++;
+			if(!dir->root_flag && 
+			   ((sector % dir->fat->sectors_per_cluster) == 0)) {
+				/* Go to next cluster... */
+				cluster = fat_get_next_cluster(dir->fat, 
+							cluster);
+				/* End of cluster chain: file not found */
+				if(cluster == fat_eoc(dir->fat)) 
+					return 0;
+				sector = fat_first_sector_of_cluster(dir->fat, 
+							cluster);
+			}
+			block_read_sectors(dir->fat->dev, sector, 1, sector_buf);
+			offset = 0;
+		}
+
+		struct fat_dirent *fatent = (void*)&sector_buf[offset];
+
+		if(fatent->name[0] == 0) 
+			return 0;	/* Empty entry, end of directory */
+		if(fatent->name[0] == (char)0xe5)
+			continue;	/* Deleted entry */
+		if(fatent->attr == FAT_ATTR_LONG_NAME) {
+#ifdef LONG_NAME_SUPPORT
+			struct fat_ldirent *ld = (void*)fatent;
+			int i;
+
+			if(ld->ord & FAT_LAST_LONG_ENTRY)
+				csum = ld->checksum;
+			if(csum != ld->checksum) /* Abandon orphaned entry */
+				csum = -1;
+
+			i = ((ld->ord & 0x3f) - 1) * 13;
+
+			/* Compare LFN to name, trash csum if mismatch */
+			switch(ascii_cmp_utf16(&name[i], ld->name1, 5))
+				{ case 0: continue; case 2: csum = -1; }
+			switch(ascii_cmp_utf16(&name[i+5], ld->name2, 6))
+				{ case 0: continue; case 2: csum = -1; }
+			switch(ascii_cmp_utf16(&name[i+11], ld->name3, 2))
+				{ case 0: continue; case 2: csum = -1; }
+#endif
+			continue;
+		}
+#ifdef LONG_NAME_SUPPORT
+		/* Long name match */
+		if(csum == lfn_chksum((uint8_t*)fatent->name)) {
+			fat_file_init(dir->fat, fatent, file);
+			return 1;
+		}
+#endif
+		/* Check for short name match */
+		if(fat_comparesfn(name, fatent->name)) {
+			fat_file_init(dir->fat, fatent, file);
+			return 1;
+		}
 	}
 	return 0;
 }

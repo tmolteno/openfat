@@ -9,7 +9,7 @@ SRC = 	fattest.c \
 
 OBJ = $(SRC:.c=.o)
 
-fattest: $(OBJ)
+fattest: $(OBJ) ../src/libopenfat.a
 	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
 
 images: fat12.img fat16.img fat32.img

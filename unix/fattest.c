@@ -47,7 +47,7 @@ void print_tree(struct fat_file_handle *dir, int nest)
 		
 		if((ent.fatent.attr == FAT_ATTR_DIRECTORY) && (ent.d_name[0] != '.')) {
 			struct fat_file_handle subdir;
-			fat_file_init(dir->fat, &ent.fatent, &subdir);
+			fat_dir_open_file(dir, ent.d_name, &subdir);
 			print_tree(&subdir, nest + 1);
 		}
 	}

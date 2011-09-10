@@ -11,7 +11,7 @@ SRC = example.c mmc.c
 
 OBJ = $(SRC:.c=.o)
 
-example.elf: $(OBJ)
+example.elf: $(OBJ) ../src/libopenfat.a
 	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
 
 .PHONY:	clean

@@ -65,11 +65,17 @@ struct fat_ldirent {
 
 struct dirent {
 	char d_name[256];
+	/* We provide the on-disk short name entry here.
+	 * Care must be taken when accessing the fields for alignment and
+	 * endianness.  Access to this will be hard to port.
+	 */
 	struct fat_dirent fatent;
 };
 
 struct fat_file_handle;
 int fat_dir_read(struct fat_file_handle *dir, struct dirent *ent);
+int fat_dir_open_file(const struct fat_file_handle *dir, const char *name,
+		struct fat_file_handle *file);
 
 #endif
 
