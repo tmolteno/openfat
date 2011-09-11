@@ -33,7 +33,7 @@
 #define FAT_ATTR_ARCHIVE	0x20
 #define FAT_ATTR_LONG_NAME	0x0F
 
-struct fat_dirent {
+struct fat_sdirent {
 	char name[11]; /* DOS file name 8.3 */
 	uint8_t attr;
 	uint8_t Reserved;
@@ -62,20 +62,6 @@ struct fat_ldirent {
 	uint16_t cluster_lo;
 	uint16_t name3[2];
 } __attribute__((packed));
-
-struct dirent {
-	char d_name[256];
-	/* We provide the on-disk short name entry here.
-	 * Care must be taken when accessing the fields for alignment and
-	 * endianness.  Access to this will be hard to port.
-	 */
-	struct fat_dirent fatent;
-};
-
-struct fat_file_handle;
-int fat_dir_read(struct fat_file_handle *dir, struct dirent *ent);
-int fat_dir_open_file(const struct fat_file_handle *dir, const char *name,
-		struct fat_file_handle *file);
 
 #endif
 

@@ -24,9 +24,11 @@
 #include <string.h>
 #include <ctype.h>
 
+#include "openfat.h"
+
 #include "leaccess.h"
 #include "blockdev.h"
-#include "fat.h"
+#include "fat_core.h"
 #include "direntry.h"
 
 #define LONG_NAME_SUPPORT
@@ -127,16 +129,17 @@ int fat_dir_read(struct fat_file_handle *h, struct dirent *ent)
 			block_read_sectors(h->fat->dev, sector, 1, sector_buf);
 			offset = 0;
 		}
-		memcpy(&ent->fatent, sector_buf + offset, 32);
+		struct fat_sdirent *fatent = (void*)&sector_buf[offset];
+		//memcpy(&ent->fatent, sector_buf + offset, 32);
 		h->position += 32;
 
-		if(ent->fatent.name[0] == 0) 
+		if(fatent->name[0] == 0) 
 			return 0;	/* Empty entry, end of directory */
-		if(ent->fatent.name[0] == (char)0xe5)
+		if(fatent->name[0] == (char)0xe5)
 			continue;	/* Deleted entry */
-		if(ent->fatent.attr == FAT_ATTR_LONG_NAME) {
+		if(fatent->attr == FAT_ATTR_LONG_NAME) {
 #ifdef LONG_NAME_SUPPORT
-			struct fat_ldirent *ld = (void*)&ent->fatent;
+			struct fat_ldirent *ld = (void*)fatent;
 			if(ld->ord & FAT_LAST_LONG_ENTRY) {
 				memset(ent->d_name, 0, sizeof(ent->d_name));
 				csum = ld->checksum;
@@ -159,16 +162,16 @@ int fat_dir_read(struct fat_file_handle *h, struct dirent *ent)
 			continue;
 		}
 #ifdef LONG_NAME_SUPPORT
-		if(csum != lfn_chksum((uint8_t*)ent->fatent.name)) 
+		if(csum != lfn_chksum((uint8_t*)fatent->name)) 
 			ent->d_name[0] = 0;
 
 		if(ent->d_name[0] == 0) {
 #endif
 			for(i = 0, j = 0; i < 11; i++, j++) {
-				ent->d_name[j] = tolower(ent->fatent.name[i]);
-				if(ent->fatent.name[i] == ' ') {
+				ent->d_name[j] = tolower(fatent->name[i]);
+				if(fatent->name[i] == ' ') {
 					ent->d_name[j] = '.';
-					while((ent->fatent.name[++i] == ' ') && (i < 11));
+					while((fatent->name[++i] == ' ') && (i < 11));
 				}
 			} 
 			if(ent->d_name[j-1] == '.')
@@ -245,7 +248,7 @@ int fat_dir_open_file(const struct fat_file_handle *dir, const char *name,
 			offset = 0;
 		}
 
-		struct fat_dirent *fatent = (void*)&sector_buf[offset];
+		struct fat_sdirent *fatent = (void*)&sector_buf[offset];
 
 		if(fatent->name[0] == 0) 
 			return 0;	/* Empty entry, end of directory */

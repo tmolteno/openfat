@@ -1,6 +1,6 @@
 .PHONY: images
 
-CFLAGS = -Wall -Wextra -std=gnu99 -g3 -MD -I../src
+CFLAGS = -Wall -Wextra -std=gnu99 -g3 -MD -I../include
 LDFLAGS = -L../src
 LIBS = -lopenfat
 

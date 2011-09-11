@@ -24,10 +24,12 @@
 #include <stdint.h>
 #include <string.h>
 
+#include "openfat.h"
+
 #include "blockdev.h"
 #include "leaccess.h"
 #include "bpb.h"
-#include "fat.h"
+#include "fat_core.h"
 
 /* Build time configuration */
 #define MAX_SECTOR_SIZE 512
@@ -118,7 +120,7 @@ void fat_file_root(const struct fat_vol_handle *fat,
 }
 
 void fat_file_init(const struct fat_vol_handle *fat, 
-		const struct fat_dirent *dirent,
+		const struct fat_sdirent *dirent,
 		struct fat_file_handle *h)
 {
 	memset(h, 0, sizeof(*h));

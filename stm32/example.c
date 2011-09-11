@@ -25,11 +25,12 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-#include "blockdev.h"
-#include "mmc.h"
+#include "openfat.h"
 #include "mbr.h"
-#include "fat.h"
-#include "direntry.h"
+
+#include "mmc.h"
+
+#include <sys/stat.h>
 
 void stm32_setup(void)
 {
@@ -63,17 +64,18 @@ void stm32_setup(void)
 
 void print_tree(struct fat_file_handle *dir, int nest)
 {
+	struct fat_file_handle subdir;
 	struct dirent ent;
+	struct stat st;
 
 	while(fat_dir_read(dir, &ent)) {
 		for(int i = 0; i < nest; i++) printf("\t");
-		printf("%02x - %s\n", ent.fatent.attr, ent.d_name);
-		
-		if((ent.fatent.attr == FAT_ATTR_DIRECTORY) && (ent.d_name[0] != '.')) {
-			struct fat_file_handle subdir;
-			fat_dir_open_file(dir, ent.d_name, &subdir);
-			print_tree(&subdir, nest + 1);
-		}
+		printf("%s\n", ent.d_name);
+
+		fat_dir_open_file(dir, ent.d_name, &subdir);
+		fat_file_stat(&subdir, &st);
+		if(S_ISDIR(st.st_mode)) 
+			print_tree(&subdir, nest+1);
 	}
 
 }
@@ -98,10 +100,9 @@ int main(void)
 	mbr_partition_init(&part, bldev, 0);
 
 	fat_vol_init(blpart, &fat);
-	fat_file_root(&fat, &root);
-
 	printf("Fat type is FAT%d\n", fat.type);
 
+	fat_path_open(&fat, "/", &root);
 	print_tree(&root, 0);
 
 	while (1) {

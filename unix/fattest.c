@@ -28,9 +28,9 @@
 
 #include <assert.h>
 
-#include "fat.h"
-#include "direntry.h"
+#include <sys/stat.h>
 
+#include "openfat.h"
 
 /* Prototypes for blockdev_file.c functions */
 extern struct block_device * 
@@ -41,6 +41,8 @@ void print_tree(struct fat_file_handle *dir, const char *path)
 {
 	struct dirent ent;
 	char tmppath[1024];
+	struct stat st;
+	struct fat_file_handle subdir;
 
 	while(fat_dir_read(dir, &ent)) {
 		if((strcmp(ent.d_name, ".") == 0) || 
@@ -49,11 +51,10 @@ void print_tree(struct fat_file_handle *dir, const char *path)
 		sprintf(tmppath, "%s/%s", path, ent.d_name);
 		puts(tmppath);
 		
-		if(ent.fatent.attr == FAT_ATTR_DIRECTORY) {
-			struct fat_file_handle subdir;
-			fat_dir_open_file(dir, ent.d_name, &subdir);
+		fat_dir_open_file(dir, ent.d_name, &subdir);
+		fat_file_stat(&subdir, &st);
+		if(S_ISDIR(st.st_mode)) 
 			print_tree(&subdir, tmppath);
-		}
 	}
 
 }
@@ -63,6 +64,7 @@ int main(int argc, char *argv[])
 	struct block_device *bldev;
 	struct fat_vol_handle fat;
 	struct fat_file_handle root;
+	struct stat st;
 	char *rootpath = argc > 2 ? argv[2] : "/";
 
 	bldev = block_device_file_new(argc > 1 ? argv[1] : "fat32.img", "r");
@@ -71,8 +73,20 @@ int main(int argc, char *argv[])
 	fat_vol_init(bldev, &fat);
 	fprintf(stderr, "Fat type is FAT%d\n", fat.type);
 
-	fat_path_open(&fat, rootpath, &root);
-	print_tree(&root, rootpath[0] == '/' ? rootpath + 1 : rootpath);
+	if(!fat_path_open(&fat, rootpath, &root)) {
+		fprintf(stderr, "Failed to find file: %s\n", rootpath);
+		return -1;
+	}
+
+	fat_file_stat(&root, &st);
+	if(S_ISDIR(st.st_mode)) {
+		print_tree(&root, rootpath[0] == '/' ? rootpath + 1 : rootpath);
+	} else {
+		char *buf = malloc(st.st_size);
+		fat_file_read(&root, buf, st.st_size);
+		fwrite(buf, st.st_size, 1, stdout);
+		fflush(stdout);
+	}
 
 	block_device_file_destroy(bldev);
 }

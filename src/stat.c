@@ -18,36 +18,41 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-/* Path name support
+/* Get status of open file
  */
 #include "openfat.h"
 
 #include <string.h>
+#include <sys/stat.h>
 
+#include "blockdev.h"
 #include "fat_core.h"
 #include "direntry.h"
 
-int fat_path_open(const struct fat_vol_handle *fat, const char *path,
-		struct fat_file_handle *h)
+int fat_file_stat(struct fat_file_handle *h, struct stat *st)
 {
-	if(!path || (path[0] == 0)) 
-		return 0;
+	struct fat_sdirent *fatent;
 
-	if(path[0] == '/') {
-		fat_file_root(fat, h);
-		path++;
-	} else {
-		/* TODO: Handle relative path */
-		fat_file_root(fat, h);
+	memset(st, 0, sizeof(*st));
+
+	if(h->dirent_sector == 0) {
+		/* Root directory */
+		st->st_mode = S_IFDIR;
+		return 0;
 	}
 
-	while(path && *path) {
-		if(!fat_dir_open_file(h, path, h)) 
-			return 0;
-		path = strchr(path, '/');
-		if(path) path++;
-	};
+	/* Read direntry sector */
+	block_read_sectors(h->fat->dev, h->dirent_sector, 1, sector_buf);
+	fatent = (void*)&sector_buf[h->dirent_offset];
+	
+	/* TODO: Fill in timestamps */
 
-	return 1;
+	if(fatent->attr & FAT_ATTR_DIRECTORY) {
+		st->st_mode = S_IFDIR;
+	} else {
+		st->st_size = __get_le32(&fatent->size);
+	}
+
+	return 0;
 }
 

@@ -18,51 +18,15 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-/* FAT Filesystem core implementation, public interface
+/* FAT Filesystem core implementation, private interface
  */
-#ifndef __FAT_H
-#define __FAT_H
+#ifndef __FAT_CORE_H
+#define __FAT_CORE_H
 
 #include "bpb.h"
 #include "direntry.h"
 
 extern uint8_t sector_buf[];
-
-struct fat_vol_handle {
-	const struct block_device *dev;
-	/* FAT type: 12, 16 or 32 */
-	int type;
-	/* Useful fields from BPB */
-	uint16_t bytes_per_sector;
-	uint8_t sectors_per_cluster;
-	uint16_t reserved_sector_count;
-	/* Fields calcuated from BPB */
-	uint32_t first_data_sector;
-	uint32_t cluster_count;
-	union {
-		struct {
-			uint32_t root_cluster;
-		} fat32;
-		struct {
-			uint16_t root_sector_count;
-			uint16_t root_first_sector;
-		} fat12_16;
-	};
-};
-
-struct fat_file_handle {
-	const struct fat_vol_handle *fat;
-	/* Fields from dir entry */
-	uint32_t size;
-	uint32_t first_cluster;
-	/* Internal state information */
-	uint32_t position;
-	uint32_t cur_cluster;	/* This is used for sector on FAT12/16 root */
-	uint8_t root_flag;	/* Flag to mark root directory on FAT12/16 */
-	/* Reference to dirent */
-	uint32_t dirent_sector;
-	uint16_t dirent_offset;
-};
 
 static inline uint32_t
 fat_eoc(const struct fat_vol_handle *fat) 
@@ -87,12 +51,9 @@ fat_first_sector_of_cluster(const struct fat_vol_handle *fat, uint32_t n)
 uint32_t 
 fat_get_next_cluster(const struct fat_vol_handle *h, uint32_t cluster);
 
-int fat_vol_init(const struct block_device *dev, struct fat_vol_handle *h);
 void fat_file_root(const struct fat_vol_handle *fat, struct fat_file_handle *h);
-void fat_file_init(const struct fat_vol_handle *fat, const struct fat_dirent *, 
+void fat_file_init(const struct fat_vol_handle *fat, const struct fat_sdirent *, 
 		struct fat_file_handle *h);
-void fat_file_seek(struct fat_file_handle *h, uint32_t offset);
-int fat_file_read(struct fat_file_handle *h, void *buf, int size);
 
 #endif
 
