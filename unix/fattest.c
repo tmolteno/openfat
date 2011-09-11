@@ -37,18 +37,22 @@ extern struct block_device *
 block_device_file_new(const char *filename, const char *mode);
 extern void block_device_file_destroy(struct block_device *bldev);
 
-void print_tree(struct fat_file_handle *dir, int nest)
+void print_tree(struct fat_file_handle *dir, const char *path)
 {
 	struct dirent ent;
+	char tmppath[1024];
 
 	while(fat_dir_read(dir, &ent)) {
-		for(int i = 0; i < nest; i++) printf("\t");
-		printf("%02x - %s\n", ent.fatent.attr, ent.d_name);
+		if((strcmp(ent.d_name, ".") == 0) || 
+		   (strcmp(ent.d_name, "..") == 0))
+			continue;
+		sprintf(tmppath, "%s/%s", path, ent.d_name);
+		puts(tmppath);
 		
-		if((ent.fatent.attr == FAT_ATTR_DIRECTORY) && (ent.d_name[0] != '.')) {
+		if(ent.fatent.attr == FAT_ATTR_DIRECTORY) {
 			struct fat_file_handle subdir;
 			fat_dir_open_file(dir, ent.d_name, &subdir);
-			print_tree(&subdir, nest + 1);
+			print_tree(&subdir, tmppath);
 		}
 	}
 
@@ -59,16 +63,16 @@ int main(int argc, char *argv[])
 	struct block_device *bldev;
 	struct fat_vol_handle fat;
 	struct fat_file_handle root;
+	char *rootpath = argc > 2 ? argv[2] : "/";
 
 	bldev = block_device_file_new(argc > 1 ? argv[1] : "fat32.img", "r");
 	assert(bldev != NULL);
 
 	fat_vol_init(bldev, &fat);
-	fat_file_root(&fat, &root);
-
 	printf("Fat type is FAT%d\n", fat.type);
 
-	print_tree(&root, 0);
+	fat_path_open(&fat, rootpath);
+	print_tree(&root, rootpath[0] == '/' ? rootpath + 1 : rootpath);
 
 	block_device_file_destroy(bldev);
 }

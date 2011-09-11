@@ -5,7 +5,7 @@ AR = $(CROSS_COMPILE)ar
 
 CFLAGS += -g3 -MD -Wall -Wextra -std=gnu99
 
-SRC = fat.c direntry.c mbr.c
+SRC = fat.c direntry.c mbr.c pathname.c
 
 OBJ = $(SRC:.c=.o)
 

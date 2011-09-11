@@ -72,13 +72,16 @@ ascii_cmp_utf16(const char *ascii, const uint16_t *utf16, int count)
 {
         while(count--) {
                 uint16_t u = __get_le16(utf16++);
+
+                /* Done on terminating null */
+                if(((*ascii == 0) || (*ascii == '/')) && (u == 0))
+                        return 0;
+
                 /* Check for mismatch or non-ascii */
                 if((u > 127) || (toupper(*ascii) != toupper(u)))
                         return 2;
 
-                /* Done on terminating null */
-                if(*ascii++ == 0) 
-                        return 0;
+		ascii++;
         }
         return 1;
 }
@@ -164,11 +167,11 @@ int fat_dir_read(struct fat_file_handle *h, struct dirent *ent)
 			for(i = 0, j = 0; i < 11; i++, j++) {
 				ent->d_name[j] = tolower(ent->fatent.name[i]);
 				if(ent->fatent.name[i] == ' ') {
-					ent->d_name[j] = (ent->d_name[0] == '.') ? ' ' : '.';
+					ent->d_name[j] = '.';
 					while((ent->fatent.name[++i] == ' ') && (i < 11));
 				}
 			} 
-			if((ent->d_name[0] != '.') && (ent->d_name[j-1] == '.'))
+			if(ent->d_name[j-1] == '.')
 				ent->d_name[j-1] = 0;
 
 			ent->d_name[j] = 0;
@@ -190,14 +193,14 @@ int fat_comparesfn(const char * name, const char *fatname)
 		/* Special case:
 		 * Only legal names are '.' and '..' */
 		memcpy(canonname, name, strlen(name));
-	} else for(i = 0; (i < 11) && *name; i++) {
+	} else for(i = 0; (i < 11) && *name && (*name != '/'); i++) {
 		if(*name == '.') {
 			if(i < 8) continue;
 			if(i == 8) name++;
 		}       
 		canonname[i] = toupper(*name++);
 	}
-	return (*name == 0) && !memcmp(canonname, fatname, 11);
+	return ((*name == 0) || (*name == '/')) && !memcmp(canonname, fatname, 11);
 }
 
 int fat_dir_open_file(const struct fat_file_handle *dir, const char *name,
@@ -209,6 +212,10 @@ int fat_dir_open_file(const struct fat_file_handle *dir, const char *name,
 	uint32_t cluster = 0;
 	uint32_t sector;
 	uint16_t offset = 0;
+
+	/* Fail if dir isn't a directory */
+	if(!dir->root_flag && dir->size)
+		return 0;
 
 	if(dir->root_flag) {
 		/* FAT12/FAT16 root directory */
