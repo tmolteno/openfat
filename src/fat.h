@@ -38,6 +38,7 @@ struct fat_vol_handle {
 	uint16_t reserved_sector_count;
 	/* Fields calcuated from BPB */
 	uint32_t first_data_sector;
+	uint32_t cluster_count;
 	union {
 		struct {
 			uint32_t root_cluster;
@@ -58,6 +59,9 @@ struct fat_file_handle {
 	uint32_t position;
 	uint32_t cur_cluster;	/* This is used for sector on FAT12/16 root */
 	uint8_t root_flag;	/* Flag to mark root directory on FAT12/16 */
+	/* Reference to dirent */
+	uint32_t dirent_sector;
+	uint16_t dirent_offset;
 };
 
 static inline uint32_t

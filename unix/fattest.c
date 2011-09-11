@@ -69,9 +69,9 @@ int main(int argc, char *argv[])
 	assert(bldev != NULL);
 
 	fat_vol_init(bldev, &fat);
-	printf("Fat type is FAT%d\n", fat.type);
+	fprintf(stderr, "Fat type is FAT%d\n", fat.type);
 
-	fat_path_open(&fat, rootpath);
+	fat_path_open(&fat, rootpath, &root);
 	print_tree(&root, rootpath[0] == '/' ? rootpath + 1 : rootpath);
 
 	block_device_file_destroy(bldev);

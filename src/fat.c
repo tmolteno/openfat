@@ -43,6 +43,7 @@ int fat_vol_init(const struct block_device *dev, struct fat_vol_handle *h)
 	
 	block_read_sectors(dev, 0, 1, sector_buf);
 	h->type = fat_type(bpb);
+	h->cluster_count = _bpb_cluster_count(bpb);
 	h->bytes_per_sector = __get_le16(&bpb->bytes_per_sector);
 	h->sectors_per_cluster = bpb->sectors_per_cluster;
 	h->first_data_sector = _bpb_first_data_sector(bpb);
@@ -141,7 +142,7 @@ void fat_file_seek(struct fat_file_handle *h, uint32_t offset)
 		return;
 	}
 
-	/* Interate over cluster chain to find cluster */
+	/* Iterate over cluster chain to find cluster */
 	while(offset >= (h->fat->sectors_per_cluster * h->fat->bytes_per_sector)) {
 		h->cur_cluster = fat_get_next_cluster(h->fat, h->cur_cluster);
 		offset -= h->fat->sectors_per_cluster * h->fat->bytes_per_sector;

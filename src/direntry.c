@@ -273,16 +273,16 @@ int fat_dir_open_file(const struct fat_file_handle *dir, const char *name,
 #endif
 			continue;
 		}
+
+		/* Check for name match */
+		if(fat_comparesfn(name, fatent->name)
 #ifdef LONG_NAME_SUPPORT
-		/* Long name match */
-		if(csum == lfn_chksum((uint8_t*)fatent->name)) {
-			fat_file_init(dir->fat, fatent, file);
-			return 1;
-		}
+		  || (csum == lfn_chksum((uint8_t*)fatent->name))
 #endif
-		/* Check for short name match */
-		if(fat_comparesfn(name, fatent->name)) {
+		  ) {
 			fat_file_init(dir->fat, fatent, file);
+			file->dirent_sector = sector;
+			file->dirent_offset = offset;
 			return 1;
 		}
 	}

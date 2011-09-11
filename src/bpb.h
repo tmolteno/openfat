@@ -115,9 +115,7 @@ enum fat_type {
 	FAT_TYPE_FAT32 = 32,
 };
 
-/* FAT type is determined by count of clusters */
-static inline enum fat_type
-fat_type(struct bpb_common *bpb)
+static inline uint32_t _bpb_cluster_count(struct bpb_common *bpb)
 {
 	uint32_t tot_sec = __get_le16(&bpb->total_sectors_16);
 	if(tot_sec == 0)
@@ -128,8 +126,14 @@ fat_type(struct bpb_common *bpb)
 		(bpb->num_fats * _bpb_fat_size(bpb)) - 
 		_bpb_root_dir_sectors(bpb);
 
-	uint32_t cluster_count = data_sec / bpb->sectors_per_cluster;
+	return data_sec / bpb->sectors_per_cluster;
+}
 
+/* FAT type is determined by count of clusters */
+static inline enum fat_type
+fat_type(struct bpb_common *bpb)
+{
+	uint32_t cluster_count = _bpb_cluster_count(bpb);
 	if(cluster_count < 4085) {
 		return FAT_TYPE_FAT12;
 	} else if(cluster_count < 65525) {
