@@ -35,6 +35,8 @@ struct block_device {
 	/* Actions on the device */
 	int (*read_sectors)(const struct block_device *dev, 
 			uint32_t sector, uint32_t count, void *buf);
+	int (*write_sectors)(const struct block_device *dev, 
+			uint32_t sector, uint32_t count, const void *buf);
 	/* ... more to be added as needed ... */
 
 	/* May be private fields here ... */
@@ -52,6 +54,13 @@ block_read_sectors(const struct block_device *dev,
 		uint32_t sector, uint32_t count, void *buf)
 {
 	return dev->read_sectors(dev, sector, count, buf);
+}
+
+static inline int 
+block_write_sectors(const struct block_device *dev,
+		uint32_t sector, uint32_t count, const void *buf)
+{
+	return dev->write_sectors(dev, sector, count, buf);
 }
 
 #endif
