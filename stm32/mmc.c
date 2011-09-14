@@ -68,13 +68,19 @@ mmc_read_buffer(const struct mmc_port *mmc, uint8_t *buf, int len)
 		*buf++ = spi_readwrite(mmc->spi, 0xFF);
 }
 
+#define TOKEN_START_SINGLE_READ		0xFE
+#define TOKEN_START_MULTI_READ		0xFE
+#define TOKEN_START_SINGLE_WRITE	0xFE
+#define TOKEN_START_MULTI_WRITE		0xFD
+#define TOKEN_STOP_MULTI_WRITE		0xFC
+
 static int
 mmc_receive_block(const struct mmc_port *mmc, uint8_t *buf, int len)
 {
 	/* wait for token */
 	while((*buf = spi_readwrite(mmc->spi, 0xFF)) == 0xFF);
 
-	if(*buf != 0xFE) /* Start data token */
+	if(*buf != TOKEN_START_SINGLE_READ) /* Start data token */
 		return -1;
 
 	mmc_read_buffer(mmc, buf, len);
@@ -85,6 +91,26 @@ mmc_receive_block(const struct mmc_port *mmc, uint8_t *buf, int len)
 	
 	return 0;
 
+}
+
+static int
+mmc_transmit_block(const struct mmc_port *mmc, const uint8_t *buf, int len)
+{
+	/* wait for not busy */
+	while(spi_readwrite(mmc->spi, 0xFF) != 0xFF);
+
+	/* Send token */
+	spi_readwrite(mmc->spi, TOKEN_START_SINGLE_WRITE);
+
+	/* Sent data frame */
+	mmc_write_buffer(mmc, buf, len);
+
+	/* Send dummy CRC bytes */
+	spi_readwrite(mmc->spi, 0xFF);
+	spi_readwrite(mmc->spi, 0xFF);
+
+	/* Return response code, zero on no error */
+	return spi_readwrite(mmc->spi, 0xFF);
 }
 
 static uint8_t
@@ -134,6 +160,23 @@ static int mmc_read_sectors(const struct block_device *bldev,
 	return 0;
 }
 
+static int mmc_write_sectors(const struct block_device *bldev,
+		uint32_t sector, uint32_t count, const void *buf)
+{
+	const struct mmc_port *mmc = (void*)bldev;
+ 
+	mmc_select(mmc);
+	while(count--) {
+		mmc_command(mmc, MMC_WRITE_BLOCK, 
+				sector * MMC_SECTOR_SIZE);
+		mmc_transmit_block(mmc, buf, MMC_SECTOR_SIZE);
+		buf += MMC_SECTOR_SIZE;
+	}
+	mmc_release(mmc);
+
+	return 0;
+}
+
 int 
 mmc_init(uint32_t spi, uint32_t cs_port, uint16_t cs_pin, struct mmc_port *mmc)
 {
@@ -145,6 +188,7 @@ mmc_init(uint32_t spi, uint32_t cs_port, uint16_t cs_pin, struct mmc_port *mmc)
 	/* Block device methods */
 	mmc->bldev.get_sector_size = mmc_get_sector_size;
 	mmc->bldev.read_sectors = mmc_read_sectors;
+	mmc->bldev.write_sectors = mmc_write_sectors;
 
 	mmc->spi = spi;
 	mmc->cs_port = cs_port;
