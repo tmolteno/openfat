@@ -155,6 +155,19 @@ int fat_file_write(struct fat_file_handle *h, const void *buf, int size)
 	uint32_t sector;
 	uint16_t offset;
 
+	if(!h->cur_cluster && size) {
+		/* File was empty, allocate first cluster. */
+		h->first_cluster = fat_find_free_cluster(h->fat);
+		if(!h->first_cluster) 
+			return 0;
+		h->cur_cluster = h->first_cluster;
+		/* Write end of chain marker in new cluster */
+		fat_set_next_cluster(h->fat, h->cur_cluster, fat_eoc(h->fat));
+		/* Directory entry will be updated with size after the
+		 * file write is done. 
+		 */
+	}
+
 	sector = fat_first_sector_of_cluster(h->fat, h->cur_cluster);
 	sector += (h->position / h->fat->bytes_per_sector) % h->fat->sectors_per_cluster;
 	offset = h->position % h->fat->bytes_per_sector;
@@ -183,7 +196,7 @@ int fat_file_write(struct fat_file_handle *h, const void *buf, int size)
 				next_cluster = fat_alloc_next_cluster(h->fat,
 						h->cur_cluster);
 				if(!next_cluster)
-					return i;
+					break;
 			}
 			h->cur_cluster = next_cluster;
 			sector = fat_first_sector_of_cluster(h->fat, 
@@ -197,6 +210,8 @@ int fat_file_write(struct fat_file_handle *h, const void *buf, int size)
 		block_read_sectors(h->fat->dev, h->dirent_sector, 1, sector_buf); 
 		struct fat_sdirent *dirent = (void*)&sector_buf[h->dirent_offset];
 		__put_le32(&dirent->size, h->size);
+		__put_le16(&dirent->cluster_hi, h->first_cluster >> 16);
+		__put_le16(&dirent->cluster_lo, h->first_cluster & 0xFFFF);
 		block_write_sectors(h->fat->dev, h->dirent_sector, 1, sector_buf); 
 	}
 

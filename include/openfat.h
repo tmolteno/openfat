@@ -40,6 +40,7 @@ int fat_path_open(const struct fat_vol_handle *fat, const char *path,
 		struct fat_file_handle *h);
 void fat_file_seek(struct fat_file_handle *h, uint32_t offset);
 int fat_file_read(struct fat_file_handle *h, void *buf, int size);
+int fat_file_write(struct fat_file_handle *h, const void *buf, int size);
 
 int fat_file_stat(struct fat_file_handle *h, struct stat *st);
 
