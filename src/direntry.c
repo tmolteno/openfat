@@ -34,7 +34,7 @@
 #define LONG_NAME_SUPPORT
 
 #ifdef LONG_NAME_SUPPORT
-uint8_t lfn_chksum(uint8_t *dosname)
+uint8_t _fat_dirent_chksum(uint8_t *dosname)
 {
 	uint8_t sum = 0;
 	int i;
@@ -110,7 +110,7 @@ int fat_readdir(struct fat_file_handle *h, struct dirent *ent)
 		sector += (h->position / h->fat->bytes_per_sector) % h->fat->sectors_per_cluster;
 	}
 	offset = h->position % h->fat->bytes_per_sector;
-	block_read_sectors(h->fat->dev, sector, 1, sector_buf); 
+	block_read_sectors(h->fat->dev, sector, 1, _fat_sector_buf); 
 
 	for(;; offset += 32) {
 		/* Read next sector if needed */
@@ -119,18 +119,18 @@ int fat_readdir(struct fat_file_handle *h, struct dirent *ent)
 			if(!h->root_flag && 
 			   ((sector % h->fat->sectors_per_cluster) == 0)) {
 				/* Go to next cluster... */
-				h->cur_cluster = fat_get_next_cluster(h->fat, 
+				h->cur_cluster = _fat_get_next_cluster(h->fat, 
 							h->cur_cluster);
 				if(h->cur_cluster == fat_eoc(h->fat)) 
 					return 0;
 				sector = fat_first_sector_of_cluster(h->fat, 
 							h->cur_cluster);
 			}
-			block_read_sectors(h->fat->dev, sector, 1, sector_buf);
+			block_read_sectors(h->fat->dev, sector, 1, _fat_sector_buf);
 			offset = 0;
 		}
-		struct fat_sdirent *fatent = (void*)&sector_buf[offset];
-		//memcpy(&ent->fatent, sector_buf + offset, 32);
+		struct fat_sdirent *fatent = (void*)&_fat_sector_buf[offset];
+		//memcpy(&ent->fatent, _fat_sector_buf + offset, 32);
 		h->position += 32;
 
 		if(fatent->name[0] == 0) 
@@ -162,7 +162,7 @@ int fat_readdir(struct fat_file_handle *h, struct dirent *ent)
 			continue;
 		}
 #ifdef LONG_NAME_SUPPORT
-		if(csum != lfn_chksum((uint8_t*)fatent->name)) 
+		if(csum != _fat_dirent_chksum((uint8_t*)fatent->name)) 
 			ent->d_name[0] = 0;
 
 		if(ent->d_name[0] == 0) {
@@ -209,7 +209,7 @@ int fat_comparesfn(const char * name, const char *fatname)
 	return ((*name == 0) || (*name == '/')) && !memcmp(canonname, fatname, 11);
 }
 
-int fat_dir_open_file(const struct fat_file_handle *dir, const char *name,
+int _fat_dir_open_file(const struct fat_file_handle *dir, const char *name,
 		struct fat_file_handle *file)
 {
 #ifdef LONG_NAME_SUPPORT
@@ -230,7 +230,7 @@ int fat_dir_open_file(const struct fat_file_handle *dir, const char *name,
 		cluster = dir->first_cluster;
 		sector = fat_first_sector_of_cluster(dir->fat, cluster);
 	}
-	block_read_sectors(dir->fat->dev, sector, 1, sector_buf); 
+	block_read_sectors(dir->fat->dev, sector, 1, _fat_sector_buf); 
 
 	for(;; offset += 32) {
 		/* Read next sector if needed */
@@ -239,7 +239,7 @@ int fat_dir_open_file(const struct fat_file_handle *dir, const char *name,
 			if(!dir->root_flag && 
 			   ((sector % dir->fat->sectors_per_cluster) == 0)) {
 				/* Go to next cluster... */
-				cluster = fat_get_next_cluster(dir->fat, 
+				cluster = _fat_get_next_cluster(dir->fat, 
 							cluster);
 				/* End of cluster chain: file not found */
 				if(cluster == fat_eoc(dir->fat)) 
@@ -247,11 +247,11 @@ int fat_dir_open_file(const struct fat_file_handle *dir, const char *name,
 				sector = fat_first_sector_of_cluster(dir->fat, 
 							cluster);
 			}
-			block_read_sectors(dir->fat->dev, sector, 1, sector_buf);
+			block_read_sectors(dir->fat->dev, sector, 1, _fat_sector_buf);
 			offset = 0;
 		}
 
-		struct fat_sdirent *fatent = (void*)&sector_buf[offset];
+		struct fat_sdirent *fatent = (void*)&_fat_sector_buf[offset];
 
 		if(fatent->name[0] == 0) 
 			return -1;	/* Empty entry, end of directory */
@@ -283,10 +283,10 @@ int fat_dir_open_file(const struct fat_file_handle *dir, const char *name,
 		/* Check for name match */
 		if(fat_comparesfn(name, fatent->name)
 #ifdef LONG_NAME_SUPPORT
-		  || (csum == lfn_chksum((uint8_t*)fatent->name))
+		  || (csum == _fat_dirent_chksum((uint8_t*)fatent->name))
 #endif
 		  ) {
-			fat_file_init(dir->fat, fatent, file);
+			_fat_file_init(dir->fat, fatent, file);
 			file->dirent_sector = sector;
 			file->dirent_offset = offset;
 			return 0;
@@ -298,11 +298,11 @@ int fat_dir_open_file(const struct fat_file_handle *dir, const char *name,
 int fat_open(const struct fat_vol_handle *vol, const char *name, int flags,
 		  struct fat_file_handle *file)
 {
-	return fat_dir_open_file(&vol->cwd, name, file);
+	return _fat_dir_open_file(&vol->cwd, name, file);
 }
 
 int fat_chdir(struct fat_vol_handle *vol, const char *name)
 {
-	return fat_dir_open_file(&vol->cwd, name, &vol->cwd);
+	return _fat_dir_open_file(&vol->cwd, name, &vol->cwd);
 }
 

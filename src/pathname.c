@@ -34,15 +34,15 @@ int fat_path_open(const struct fat_vol_handle *fat, const char *path,
 		return 0;
 
 	if(path[0] == '/') {
-		fat_file_root(fat, h);
+		_fat_file_root(fat, h);
 		path++;
 	} else {
 		/* TODO: Handle relative path */
-		fat_file_root(fat, h);
+		_fat_file_root(fat, h);
 	}
 
 	while(path && *path) {
-		if(!fat_dir_open_file(h, path, h)) 
+		if(!_fat_dir_open_file(h, path, h)) 
 			return 0;
 		path = strchr(path, '/');
 		if(path) path++;

@@ -27,7 +27,8 @@
 #include "blockdev.h"
 #include "mbr.h"
 
-extern uint8_t sector_buf[];
+/* In fat_core.c */
+extern uint8_t _fat_sector_buf[];
 
 static int mbr_read_sectors(const struct block_device *dev, 
 			uint32_t sector, uint32_t count, void *buf)
@@ -41,9 +42,9 @@ static int mbr_read_sectors(const struct block_device *dev,
 int mbr_partition_init(struct block_mbr_partition *part, 
 			struct block_device *whole, uint8_t part_index)
 {
-	struct mbr_partition *part_table = (void*)&sector_buf[446];
+	struct mbr_partition *part_table = (void*)&_fat_sector_buf[446];
 	/* Read MBR from whole device */
-	block_read_sectors(whole, 0, 1, sector_buf);
+	block_read_sectors(whole, 0, 1, _fat_sector_buf);
 	
 	part->whole = whole;
 

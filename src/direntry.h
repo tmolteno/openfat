@@ -55,5 +55,8 @@ struct fat_ldirent {
 	uint16_t name3[2];
 } __attribute__((packed));
 
+int _fat_dir_open_file(const struct fat_file_handle *dir, const char *name,
+		struct fat_file_handle *file) __attribute__((deprecated));
+
 #endif
 

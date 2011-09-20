@@ -26,7 +26,7 @@
 #include "bpb.h"
 #include "direntry.h"
 
-extern uint8_t sector_buf[];
+extern uint8_t _fat_sector_buf[];
 
 static inline uint32_t
 fat_eoc(const struct fat_vol_handle *fat) 
@@ -49,10 +49,10 @@ fat_first_sector_of_cluster(const struct fat_vol_handle *fat, uint32_t n)
 }
 
 uint32_t 
-fat_get_next_cluster(const struct fat_vol_handle *h, uint32_t cluster);
+_fat_get_next_cluster(const struct fat_vol_handle *h, uint32_t cluster);
 
-void fat_file_root(const struct fat_vol_handle *fat, struct fat_file_handle *h);
-void fat_file_init(const struct fat_vol_handle *fat, const struct fat_sdirent *, 
+void _fat_file_root(const struct fat_vol_handle *fat, struct fat_file_handle *h);
+void _fat_file_init(const struct fat_vol_handle *fat, const struct fat_sdirent *, 
 		struct fat_file_handle *h);
 
 #endif

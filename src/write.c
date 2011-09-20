@@ -26,11 +26,11 @@
 
 #include "fat_core.h"
 
-uint32_t fat_find_free_cluster(const struct fat_vol_handle *h)
+static uint32_t fat_find_free_cluster(const struct fat_vol_handle *h)
 {
 	for(uint32_t i = 2; i < h->cluster_count; i++) {
 		/* FIXME: Read sectors here to save reads */
-		if(fat_get_next_cluster(h, i) == 0)
+		if(_fat_get_next_cluster(h, i) == 0)
 			return i;
 	}
 
@@ -47,14 +47,14 @@ fat32_set_next_cluster(const struct fat_vol_handle *h,
 	sector = h->reserved_sector_count + (offset / h->bytes_per_sector);
 	offset %= h->bytes_per_sector;
 
-	block_read_sectors(h->dev, sector, 1, sector_buf); 
+	block_read_sectors(h->dev, sector, 1, _fat_sector_buf); 
 
 	/* Preserve high nybble */
 	next &= 0x0FFFFFFF;
-	next |= __get_le32((uint32_t*)(sector_buf + offset)) & 0xF0000000;
-	__put_le32((uint32_t*)(sector_buf + offset), next);
+	next |= __get_le32((uint32_t*)(_fat_sector_buf + offset)) & 0xF0000000;
+	__put_le32((uint32_t*)(_fat_sector_buf + offset), next);
 
-	block_write_sectors(h->dev, sector, 1, sector_buf); 
+	block_write_sectors(h->dev, sector, 1, _fat_sector_buf); 
 
 	return 0;
 }
@@ -69,9 +69,9 @@ fat16_set_next_cluster(const struct fat_vol_handle *h,
 	sector = h->reserved_sector_count + (offset / h->bytes_per_sector);
 	offset %= h->bytes_per_sector;
 
-	block_read_sectors(h->dev, sector, 1, sector_buf); 
-	__put_le16((uint16_t*)(sector_buf + offset), next);
-	block_write_sectors(h->dev, sector, 1, sector_buf); 
+	block_read_sectors(h->dev, sector, 1, _fat_sector_buf); 
+	__put_le16((uint16_t*)(_fat_sector_buf + offset), next);
+	block_write_sectors(h->dev, sector, 1, _fat_sector_buf); 
 
 	return 0;
 }
@@ -85,33 +85,33 @@ fat12_set_next_cluster(const struct fat_vol_handle *h,
 	sector = h->reserved_sector_count + (offset / h->bytes_per_sector);
 	offset %= h->bytes_per_sector;
 
-	block_read_sectors(h->dev, sector, 1, sector_buf); 
+	block_read_sectors(h->dev, sector, 1, _fat_sector_buf); 
 	if(offset == (uint32_t)h->bytes_per_sector - 1) {
 		if(cluster & 1) {
 			next <<= 4;
-			sector_buf[offset] &= 0x0F;
-			sector_buf[offset] |= next & 0xF0;
-			block_write_sectors(h->dev, sector, 1, sector_buf); 
-			block_read_sectors(h->dev, sector + 1, 1, sector_buf); 
-			sector_buf[0] = next >> 8;
+			_fat_sector_buf[offset] &= 0x0F;
+			_fat_sector_buf[offset] |= next & 0xF0;
+			block_write_sectors(h->dev, sector, 1, _fat_sector_buf); 
+			block_read_sectors(h->dev, sector + 1, 1, _fat_sector_buf); 
+			_fat_sector_buf[0] = next >> 8;
 		} else {
-			sector_buf[offset] = next & 0xFF;
-			block_write_sectors(h->dev, sector, 1, sector_buf); 
-			block_read_sectors(h->dev, sector + 1, 1, sector_buf); 
-			sector_buf[0] &= 0xF0;
-			sector_buf[0] |= (next >> 8) & 0x0F;
+			_fat_sector_buf[offset] = next & 0xFF;
+			block_write_sectors(h->dev, sector, 1, _fat_sector_buf); 
+			block_read_sectors(h->dev, sector + 1, 1, _fat_sector_buf); 
+			_fat_sector_buf[0] &= 0xF0;
+			_fat_sector_buf[0] |= (next >> 8) & 0x0F;
 		}
 	} else {
 		if(cluster & 1) {
 			next <<= 4;
-			next |= __get_le16((uint16_t*)(sector_buf + offset)) & 0xF;
+			next |= __get_le16((uint16_t*)(_fat_sector_buf + offset)) & 0xF;
 		} else {
 			next &= 0x0FFF;
-			next |= __get_le16((uint16_t*)(sector_buf + offset)) & 0xF000;
+			next |= __get_le16((uint16_t*)(_fat_sector_buf + offset)) & 0xF000;
 		}
-		__put_le16((uint16_t*)(sector_buf + offset), next);
+		__put_le16((uint16_t*)(_fat_sector_buf + offset), next);
 	}
-	block_write_sectors(h->dev, sector, 1, sector_buf); 
+	block_write_sectors(h->dev, sector, 1, _fat_sector_buf); 
 
 	return 0;
 }
@@ -131,7 +131,7 @@ fat_set_next_cluster(const struct fat_vol_handle *h,
 	return -1;
 }
 
-uint32_t fat_alloc_next_cluster(const struct fat_vol_handle *h, 
+static int32_t fat_alloc_next_cluster(const struct fat_vol_handle *h, 
 				uint32_t cluster)
 {
 	uint32_t next = fat_find_free_cluster(h);
@@ -175,10 +175,10 @@ int fat_write(struct fat_file_handle *h, const void *buf, int size)
 	for(i = 0; i < size; ) {
 		uint16_t chunk = MIN(h->fat->bytes_per_sector - offset, size - i);
 		if(chunk < h->fat->bytes_per_sector)
-			block_read_sectors(h->fat->dev, sector, 1, sector_buf); 
+			block_read_sectors(h->fat->dev, sector, 1, _fat_sector_buf); 
 
-		memcpy(sector_buf + offset, buf + i, chunk);
-		block_write_sectors(h->fat->dev, sector, 1, sector_buf); 
+		memcpy(_fat_sector_buf + offset, buf + i, chunk);
+		block_write_sectors(h->fat->dev, sector, 1, _fat_sector_buf); 
 		h->position += chunk;
 		i += chunk;
 		if((h->position % h->fat->bytes_per_sector) != 0) 
@@ -190,7 +190,7 @@ int fat_write(struct fat_file_handle *h, const void *buf, int size)
 			continue;
 		if((sector % h->fat->sectors_per_cluster) == 0) {
 			/* Go to next cluster... */
-			uint32_t next_cluster = fat_get_next_cluster(h->fat, 
+			uint32_t next_cluster = _fat_get_next_cluster(h->fat, 
 						h->cur_cluster);
 			if(next_cluster == fat_eoc(h->fat)) {
 				next_cluster = fat_alloc_next_cluster(h->fat,
@@ -207,12 +207,12 @@ int fat_write(struct fat_file_handle *h, const void *buf, int size)
 	if(h->dirent_sector && (h->position > h->size)) {
 		/* Update directory entry with new size */
 		h->size = h->position;
-		block_read_sectors(h->fat->dev, h->dirent_sector, 1, sector_buf); 
-		struct fat_sdirent *dirent = (void*)&sector_buf[h->dirent_offset];
+		block_read_sectors(h->fat->dev, h->dirent_sector, 1, _fat_sector_buf); 
+		struct fat_sdirent *dirent = (void*)&_fat_sector_buf[h->dirent_offset];
 		__put_le32(&dirent->size, h->size);
 		__put_le16(&dirent->cluster_hi, h->first_cluster >> 16);
 		__put_le16(&dirent->cluster_lo, h->first_cluster & 0xFFFF);
-		block_write_sectors(h->fat->dev, h->dirent_sector, 1, sector_buf); 
+		block_write_sectors(h->fat->dev, h->dirent_sector, 1, _fat_sector_buf); 
 	}
 
 	return i;
