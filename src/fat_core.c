@@ -23,6 +23,7 @@
 
 #include <stdint.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "openfat.h"
 
@@ -58,6 +59,7 @@ int fat_vol_init(const struct block_device *dev, struct fat_vol_handle *h)
 		h->fat12_16.root_first_sector = _bpb_first_data_sector(bpb) - 
 					h->fat12_16.root_sector_count;
 	}
+	fat_file_root(h, &h->cwd);
 
 	return 0;
 }
@@ -131,9 +133,20 @@ void fat_file_init(const struct fat_vol_handle *fat,
 	h->cur_cluster = h->first_cluster;
 }
 
-void fat_file_seek(struct fat_file_handle *h, uint32_t offset)
+off_t fat_lseek(struct fat_file_handle *h, off_t offset, int whence)
 {
 	h->cur_cluster = h->first_cluster;
+
+	switch(whence) {
+	case SEEK_SET:
+		break;
+	case SEEK_CUR:
+		offset += h->position;
+	case SEEK_END:
+		offset += h->size;
+	default:
+		return -1;
+	}
 
 	if(h->size && (offset > h->size))
 		offset = h->size;
@@ -150,10 +163,11 @@ void fat_file_seek(struct fat_file_handle *h, uint32_t offset)
 		offset -= h->fat->sectors_per_cluster * h->fat->bytes_per_sector;
 	}
 
+	return h->position;
 }
 
 #define MIN(x, y) (((x) < (y))?(x):(y))
-int fat_file_read(struct fat_file_handle *h, void *buf, int size)
+int fat_read(struct fat_file_handle *h, void *buf, int size)
 {
 	int i;
 	uint32_t sector;

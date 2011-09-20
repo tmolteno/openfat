@@ -89,7 +89,7 @@ ascii_cmp_utf16(const char *ascii, const uint16_t *utf16, int count)
 }
 #endif
 
-int fat_dir_read(struct fat_file_handle *h, struct dirent *ent)
+int fat_readdir(struct fat_file_handle *h, struct dirent *ent)
 {
 #ifdef LONG_NAME_SUPPORT
 	uint16_t csum = -1;
@@ -181,6 +181,8 @@ int fat_dir_read(struct fat_file_handle *h, struct dirent *ent)
 #ifdef LONG_NAME_SUPPORT
 		}
 #endif
+		/* Non-standard */
+		ent->fat_attr = fatent->attr;
 
 		return 1;
 	}
@@ -196,6 +198,7 @@ int fat_comparesfn(const char * name, const char *fatname)
 		/* Special case:
 		 * Only legal names are '.' and '..' */
 		memcpy(canonname, name, strlen(name));
+		name += strlen(name);
 	} else for(i = 0; (i < 11) && *name && (*name != '/'); i++) {
 		if(*name == '.') {
 			if(i < 8) continue;
@@ -218,7 +221,7 @@ int fat_dir_open_file(const struct fat_file_handle *dir, const char *name,
 
 	/* Fail if dir isn't a directory */
 	if(!dir->root_flag && dir->size)
-		return 0;
+		return -1;
 
 	if(dir->root_flag) {
 		/* FAT12/FAT16 root directory */
@@ -240,7 +243,7 @@ int fat_dir_open_file(const struct fat_file_handle *dir, const char *name,
 							cluster);
 				/* End of cluster chain: file not found */
 				if(cluster == fat_eoc(dir->fat)) 
-					return 0;
+					return -1;
 				sector = fat_first_sector_of_cluster(dir->fat, 
 							cluster);
 			}
@@ -251,7 +254,7 @@ int fat_dir_open_file(const struct fat_file_handle *dir, const char *name,
 		struct fat_sdirent *fatent = (void*)&sector_buf[offset];
 
 		if(fatent->name[0] == 0) 
-			return 0;	/* Empty entry, end of directory */
+			return -1;	/* Empty entry, end of directory */
 		if(fatent->name[0] == (char)0xe5)
 			continue;	/* Deleted entry */
 		if(fatent->attr == FAT_ATTR_LONG_NAME) {
@@ -286,9 +289,20 @@ int fat_dir_open_file(const struct fat_file_handle *dir, const char *name,
 			fat_file_init(dir->fat, fatent, file);
 			file->dirent_sector = sector;
 			file->dirent_offset = offset;
-			return 1;
+			return 0;
 		}
 	}
-	return 0;
+	return -1;
+}
+
+int fat_open(const struct fat_vol_handle *vol, const char *name, int flags,
+		  struct fat_file_handle *file)
+{
+	return fat_dir_open_file(&vol->cwd, name, file);
+}
+
+int fat_chdir(struct fat_vol_handle *vol, const char *name)
+{
+	return fat_dir_open_file(&vol->cwd, name, &vol->cwd);
 }
 

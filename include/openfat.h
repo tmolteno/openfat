@@ -34,27 +34,68 @@
 struct fat_vol_handle;
 struct fat_file_handle;
 
+/* Mount a FAT volume. */
 int fat_vol_init(const struct block_device *dev, struct fat_vol_handle *h);
 
-int fat_path_open(const struct fat_vol_handle *fat, const char *path,
-		struct fat_file_handle *h);
-void fat_file_seek(struct fat_file_handle *h, uint32_t offset);
-int fat_file_read(struct fat_file_handle *h, void *buf, int size);
-int fat_file_write(struct fat_file_handle *h, const void *buf, int size);
+/* Change current working directory */
+int fat_chdir(struct fat_vol_handle *vol, const char *name);
+/* Create a new directory */
+int fat_mkdir(struct fat_vol_handle *vol, const char *name); /* TODO */
+/* Remove an empty directory */
+int fat_rmdir(struct fat_vol_handle *vol, const char *name); /* TODO */
 
-int fat_file_stat(struct fat_file_handle *h, struct stat *st);
+/* Open a file */
+int fat_open(const struct fat_vol_handle *vol, const char *name, int flags,
+		  struct fat_file_handle *file);
+/* Read from a file */
+int fat_read(struct fat_file_handle *h, void *buf, int size);
+/* Write to a file */
+int fat_write(struct fat_file_handle *h, const void *buf, int size);
+/* Seek in a file */
+off_t fat_lseek(struct fat_file_handle *h, off_t offset, int whence);
+/* Unlink/delete a file */
+int fat_unlink(const struct fat_vol_handle *vol, const char *name); /* TODO */
+
+#define FAT_ATTR_READ_ONLY	0x01
+#define FAT_ATTR_HIDDEN		0x02
+#define FAT_ATTR_SYSTEM		0x04
+#define FAT_ATTR_VOLUME_ID	0x08
+#define FAT_ATTR_DIRECTORY	0x10
+#define FAT_ATTR_ARCHIVE	0x20
+#define FAT_ATTR_LONG_NAME	0x0F
 
 struct dirent {
 	char d_name[256];
+	/* Non-standard */
+	uint8_t fat_attr;	/* FAT file attributes */
 };
 
-int fat_dir_read(struct fat_file_handle *dir, struct dirent *ent);
+int fat_readdir(struct fat_file_handle *dir, struct dirent *ent);
+
+/* Working functions for now... may be removed */
+int fat_file_stat(struct fat_file_handle *h, struct stat *st);
 int fat_dir_open_file(const struct fat_file_handle *dir, const char *name,
-		struct fat_file_handle *file);
+		struct fat_file_handle *file) __attribute__((deprecated));
+int fat_path_open(const struct fat_vol_handle *fat, const char *path,
+		struct fat_file_handle *h);
 
 /* Everything below is private.  Applications should not direcly access
  * anything here.
  */
+struct fat_file_handle {
+	const struct fat_vol_handle *fat;
+	/* Fields from dir entry */
+	uint32_t size;
+	uint32_t first_cluster;
+	/* Internal state information */
+	uint32_t position;
+	uint32_t cur_cluster;	/* This is used for sector on FAT12/16 root */
+	uint8_t root_flag;	/* Flag to mark root directory on FAT12/16 */
+	/* Reference to dirent */
+	uint32_t dirent_sector;
+	uint16_t dirent_offset;
+};
+
 struct fat_vol_handle {
 	const struct block_device *dev;
 	/* FAT type: 12, 16 or 32 */
@@ -75,20 +116,8 @@ struct fat_vol_handle {
 			uint16_t root_first_sector;
 		} fat12_16;
 	};
-};
-
-struct fat_file_handle {
-	const struct fat_vol_handle *fat;
-	/* Fields from dir entry */
-	uint32_t size;
-	uint32_t first_cluster;
-	/* Internal state information */
-	uint32_t position;
-	uint32_t cur_cluster;	/* This is used for sector on FAT12/16 root */
-	uint8_t root_flag;	/* Flag to mark root directory on FAT12/16 */
-	/* Reference to dirent */
-	uint32_t dirent_sector;
-	uint16_t dirent_offset;
+	/* Internal state */
+	struct fat_file_handle cwd;
 };
 
 #endif

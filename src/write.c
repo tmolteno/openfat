@@ -148,7 +148,7 @@ uint32_t fat_alloc_next_cluster(const struct fat_vol_handle *h,
 }
 
 #define MIN(x, y) (((x) < (y))?(x):(y))
-int fat_file_write(struct fat_file_handle *h, const void *buf, int size)
+int fat_write(struct fat_file_handle *h, const void *buf, int size)
 {
 	/* FIXME: don't write past end of FAT12/FAT16 root directory! */
 	int i;

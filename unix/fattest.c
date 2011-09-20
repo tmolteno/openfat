@@ -37,24 +37,26 @@ extern struct block_device *
 block_device_file_new(const char *filename, const char *mode);
 extern void block_device_file_destroy(struct block_device *bldev);
 
-void print_tree(struct fat_file_handle *dir, const char *path)
+void print_tree(struct fat_vol_handle *vol, struct fat_file_handle *dir, 
+		const char *path)
 {
 	struct dirent ent;
 	char tmppath[1024];
-	struct stat st;
 	struct fat_file_handle subdir;
 
-	while(fat_dir_read(dir, &ent)) {
+	while(fat_readdir(dir, &ent)) {
 		if((strcmp(ent.d_name, ".") == 0) || 
 		   (strcmp(ent.d_name, "..") == 0))
 			continue;
 		sprintf(tmppath, "%s/%s", path, ent.d_name);
 		puts(tmppath);
 		
-		fat_dir_open_file(dir, ent.d_name, &subdir);
-		fat_file_stat(&subdir, &st);
-		if(S_ISDIR(st.st_mode)) 
-			print_tree(&subdir, tmppath);
+		if(ent.fat_attr == FAT_ATTR_DIRECTORY) {
+			fat_chdir(vol, ent.d_name);
+			fat_open(vol, ".", 0, &subdir);
+			print_tree(vol, &subdir, tmppath);
+			fat_chdir(vol, "..");
+		}
 	}
 
 }
@@ -80,10 +82,10 @@ int main(int argc, char *argv[])
 
 	fat_file_stat(&root, &st);
 	if(S_ISDIR(st.st_mode)) {
-		print_tree(&root, rootpath[0] == '/' ? rootpath + 1 : rootpath);
+		print_tree(&fat, &root, rootpath[0] == '/' ? rootpath + 1 : rootpath);
 	} else {
 		char *buf = malloc(st.st_size);
-		fat_file_read(&root, buf, st.st_size);
+		fat_read(&root, buf, st.st_size);
 		fwrite(buf, st.st_size, 1, stdout);
 		fflush(stdout);
 	}
