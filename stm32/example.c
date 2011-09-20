@@ -62,20 +62,22 @@ void stm32_setup(void)
 			GPIO3);
 }
 
-void print_tree(struct fat_file_handle *dir, int nest)
+void print_tree(struct fat_vol_handle *vol, struct fat_file_handle *dir, int nest)
 {
 	struct fat_file_handle subdir;
 	struct dirent ent;
 	struct stat st;
 
-	while(fat_dir_read(dir, &ent)) {
+	while(fat_readdir(dir, &ent)) {
 		for(int i = 0; i < nest; i++) printf("\t");
 		printf("%s\n", ent.d_name);
 
-		fat_dir_open_file(dir, ent.d_name, &subdir);
-		fat_file_stat(&subdir, &st);
-		if(S_ISDIR(st.st_mode)) 
-			print_tree(&subdir, nest+1);
+		if(ent.fat_attr == FAT_ATTR_DIRECTORY) {
+			fat_chdir(vol, ent.d_name);
+			fat_open(vol, ".", 0, &subdir);
+			print_tree(vol, &subdir, nest + 1);
+			fat_chdir(vol, "..");
+		}
 	}
 
 }
@@ -103,7 +105,7 @@ int main(void)
 	printf("Fat type is FAT%d\n", fat.type);
 
 	fat_path_open(&fat, "/", &root);
-	print_tree(&root, 0);
+	print_tree(&fat, &root, 0);
 
 	while (1) {
 	}
