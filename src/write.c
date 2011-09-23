@@ -21,6 +21,7 @@
 /* FAT Filesystem write support implementation
  */
 #include <string.h>
+#include <errno.h>
 
 #include "openfat.h"
 
@@ -223,3 +224,37 @@ int fat_write(struct fat_file_handle *h, const void *buf, int size)
 
 	return i;
 }
+
+static int fat_chain_unlink(const struct fat_vol_handle *vol, uint32_t cluster)
+{
+	int ret = 0;
+	while(cluster && (cluster != fat_eoc(vol))) {
+		uint32_t next = _fat_get_next_cluster(vol, cluster); 
+		ret |= fat_set_next_cluster(vol, cluster, 0);
+		cluster = next;
+	}
+	return ret;
+}
+
+int fat_unlink(const struct fat_vol_handle *vol, const char *name)
+{
+	struct fat_file_handle h;
+
+	fat_open(vol, name, 0, &h);
+	/* Don't try to remove the root directory */
+	if(!h.dirent_sector)
+		return -EISDIR;
+
+	/* Free up cluster chain */
+	fat_chain_unlink(vol, h.first_cluster); 
+
+	/* Mark directory entry as deleted */
+	block_read_sectors(vol->dev, h.dirent_sector, 1, _fat_sector_buf); 
+	_fat_sector_buf[h.dirent_offset] = 0xE5;
+	block_write_sectors(vol->dev, h.dirent_sector, 1, _fat_sector_buf); 
+
+	/* FIXME: Remove long name entries. */
+
+	return 0;
+}
+

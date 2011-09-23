@@ -54,7 +54,7 @@ int fat_write(struct fat_file_handle *h, const void *buf, int size);
 /* Seek in a file */
 off_t fat_lseek(struct fat_file_handle *h, off_t offset, int whence);
 /* Unlink/delete a file */
-int fat_unlink(const struct fat_vol_handle *vol, const char *name); /* TODO */
+int fat_unlink(const struct fat_vol_handle *vol, const char *name);
 
 #define FAT_ATTR_READ_ONLY	0x01
 #define FAT_ATTR_HIDDEN		0x02
