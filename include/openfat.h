@@ -102,9 +102,11 @@ struct fat_vol_handle {
 	uint16_t bytes_per_sector;
 	uint8_t sectors_per_cluster;
 	uint16_t reserved_sector_count;
+	uint8_t num_fats;
 	/* Fields calcuated from BPB */
 	uint32_t first_data_sector;
 	uint32_t cluster_count;
+	uint32_t fat_size;
 	union {
 		struct {
 			uint32_t root_cluster;

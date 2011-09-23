@@ -38,13 +38,14 @@ static uint32_t fat_find_free_cluster(const struct fat_vol_handle *h)
 }
 
 static int 
-fat32_set_next_cluster(const struct fat_vol_handle *h, 
+fat32_set_next_cluster(const struct fat_vol_handle *h, uint8_t fat,
 			uint32_t cluster, uint32_t next)
 {
 	uint32_t offset = cluster * 4;
 	uint32_t sector;
 
-	sector = h->reserved_sector_count + (offset / h->bytes_per_sector);
+	sector = h->reserved_sector_count + (fat * h->fat_size) +
+		(offset / h->bytes_per_sector);
 	offset %= h->bytes_per_sector;
 
 	block_read_sectors(h->dev, sector, 1, _fat_sector_buf); 
@@ -60,13 +61,14 @@ fat32_set_next_cluster(const struct fat_vol_handle *h,
 }
 
 static int 
-fat16_set_next_cluster(const struct fat_vol_handle *h, 
+fat16_set_next_cluster(const struct fat_vol_handle *h, uint8_t fat,
 			uint16_t cluster, uint16_t next)
 {
 	uint32_t offset = cluster * 2;
 	uint32_t sector;
 
-	sector = h->reserved_sector_count + (offset / h->bytes_per_sector);
+	sector = h->reserved_sector_count + (fat * h->fat_size) + 
+		(offset / h->bytes_per_sector);
 	offset %= h->bytes_per_sector;
 
 	block_read_sectors(h->dev, sector, 1, _fat_sector_buf); 
@@ -77,12 +79,13 @@ fat16_set_next_cluster(const struct fat_vol_handle *h,
 }
 
 static int 
-fat12_set_next_cluster(const struct fat_vol_handle *h, 
+fat12_set_next_cluster(const struct fat_vol_handle *h, uint8_t fat,
 			uint16_t cluster, uint16_t next)
 {
 	uint32_t offset = cluster + (cluster / 2);
 	uint32_t sector;
-	sector = h->reserved_sector_count + (offset / h->bytes_per_sector);
+	sector = h->reserved_sector_count + (fat * h->fat_size) + 
+		(offset / h->bytes_per_sector);
 	offset %= h->bytes_per_sector;
 
 	block_read_sectors(h->dev, sector, 1, _fat_sector_buf); 
@@ -120,15 +123,18 @@ static int
 fat_set_next_cluster(const struct fat_vol_handle *h, 
 			uint32_t cluster, uint32_t next)
 {
-	switch(h->type) {
-	case FAT_TYPE_FAT12:
-		return fat12_set_next_cluster(h, cluster, next);
-	case FAT_TYPE_FAT16:
-		return fat16_set_next_cluster(h, cluster, next);
-	case FAT_TYPE_FAT32:
-		return fat32_set_next_cluster(h, cluster, next);
+	int ret = 0;
+	for(int i = 0; i < h->num_fats; i++) {
+		switch(h->type) {
+		case FAT_TYPE_FAT12:
+			ret |= fat12_set_next_cluster(h, cluster, i, next);
+		case FAT_TYPE_FAT16:
+			ret |= fat16_set_next_cluster(h, cluster, i, next);
+		case FAT_TYPE_FAT32:
+			ret |= fat32_set_next_cluster(h, cluster, i, next);
+		}
 	}
-	return -1;
+	return ret;
 }
 
 static int32_t fat_alloc_next_cluster(const struct fat_vol_handle *h, 
