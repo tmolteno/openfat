@@ -27,7 +27,7 @@
 #include "fat_core.h"
 #include "direntry.h"
 
-int fat_path_open(const struct fat_vol_handle *fat, const char *path,
+int fat_path_open(struct fat_vol_handle *fat, const char *path,
 		struct fat_file_handle *h)
 {
 	if(!path || (path[0] == 0)) 
@@ -42,7 +42,8 @@ int fat_path_open(const struct fat_vol_handle *fat, const char *path,
 	}
 
 	while(path && *path) {
-		if(!_fat_dir_open_file(h, path, h)) 
+		memcpy(&fat->cwd, h, sizeof(*h));
+		if(!fat_open(fat, path, 0, h)) 
 			return 0;
 		path = strchr(path, '/');
 		if(path) path++;

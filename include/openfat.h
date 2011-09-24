@@ -74,8 +74,8 @@ int fat_readdir(struct fat_file_handle *dir, struct dirent *ent);
 
 /* Working functions for now... may be removed */
 int fat_file_stat(struct fat_file_handle *h, struct stat *st);
-int fat_path_open(const struct fat_vol_handle *fat, const char *path,
-		struct fat_file_handle *h);
+int fat_path_open(struct fat_vol_handle *fat, const char *path,
+		struct fat_file_handle *h) __attribute__((deprecated));
 
 /* Everything below is private.  Applications should not direcly access
  * anything here.
