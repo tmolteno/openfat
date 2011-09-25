@@ -216,7 +216,7 @@ int fat_open(const struct fat_vol_handle *vol, const char *name, int flags,
 	uint16_t csum = -1;
 #endif
 	uint32_t sector;
-	uint16_t offset = 0;
+	uint16_t offset;
 	struct fat_file_handle *dir = (struct fat_file_handle*)&vol->cwd;
 
 	/* Fail if dir isn't a directory */
@@ -232,7 +232,7 @@ int fat_open(const struct fat_vol_handle *vol, const char *name, int flags,
 	}
 	block_read_sectors(dir->fat->dev, sector, 1, _fat_sector_buf); 
 
-	for(;; offset += 32, dir->position += 32) {
+	for(offset = 0, dir->position = 0;; offset += 32) {
 		/* Read next sector if needed */
 		if(offset == dir->fat->bytes_per_sector) {
 			sector++;
@@ -255,8 +255,11 @@ int fat_open(const struct fat_vol_handle *vol, const char *name, int flags,
 
 		struct fat_sdirent *fatent = (void*)&_fat_sector_buf[offset];
 
-		if(fatent->name[0] == 0) 
+		if(fatent->name[0] == 0)
 			return -1;	/* Empty entry, end of directory */
+
+		dir->position += 32;
+
 		if(fatent->name[0] == (char)0xe5)
 			continue;	/* Deleted entry */
 		if(fatent->attr == FAT_ATTR_LONG_NAME) {
@@ -289,8 +292,10 @@ int fat_open(const struct fat_vol_handle *vol, const char *name, int flags,
 #endif
 		  ) {
 			_fat_file_init(dir->fat, fatent, file);
-			file->dirent_sector = sector;
-			file->dirent_offset = offset;
+			if(!(fatent->attr & FAT_ATTR_DIRECTORY)) {
+				file->dirent_sector = sector;
+				file->dirent_offset = offset;
+			}
 			return 0;
 		}
 	}

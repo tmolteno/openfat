@@ -40,7 +40,7 @@ int fat_vol_init(const struct block_device *dev, struct fat_vol_handle *h);
 /* Change current working directory */
 int fat_chdir(struct fat_vol_handle *vol, const char *name);
 /* Create a new directory */
-int fat_mkdir(struct fat_vol_handle *vol, const char *name); /* TODO */
+int fat_mkdir(struct fat_vol_handle *vol, const char *name);
 /* Remove an empty directory */
 int fat_rmdir(struct fat_vol_handle *vol, const char *name); /* TODO */
 

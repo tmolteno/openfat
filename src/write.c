@@ -21,6 +21,7 @@
 /* FAT Filesystem write support implementation
  */
 #include <string.h>
+#include <ctype.h>
 #include <errno.h>
 
 #include "openfat.h"
@@ -128,28 +129,48 @@ fat_set_next_cluster(const struct fat_vol_handle *h,
 	for(int i = 0; i < h->num_fats; i++) {
 		switch(h->type) {
 		case FAT_TYPE_FAT12:
-			ret |= fat12_set_next_cluster(h, cluster, i, next);
+			ret |= fat12_set_next_cluster(h, i, cluster, next);
+			break;
 		case FAT_TYPE_FAT16:
-			ret |= fat16_set_next_cluster(h, cluster, i, next);
+			ret |= fat16_set_next_cluster(h, i, cluster, next);
+			break;
 		case FAT_TYPE_FAT32:
-			ret |= fat32_set_next_cluster(h, cluster, i, next);
+			ret |= fat32_set_next_cluster(h, i, cluster, next);
+			break;
 		}
 	}
 	return ret;
 }
 
 static int32_t fat_alloc_next_cluster(const struct fat_vol_handle *h, 
-				uint32_t cluster)
+				uint32_t cluster, int clear)
 {
-	uint32_t next = fat_find_free_cluster(h);
+	/* Return next if already allocated */
+	uint32_t next = _fat_get_next_cluster(h, cluster);
 
-	if(!next) 
+	if(next != fat_eoc(h)) 
+		return next;
+	
+	/* Find free cluster to link to */
+	next = fat_find_free_cluster(h);
+
+	if(!next) /* No more free clusters */
 		return 0;
 
 	/* Write end of chain marker in new cluster */
 	fat_set_next_cluster(h, next, fat_eoc(h));
 	/* Add new cluster to chain */
 	fat_set_next_cluster(h, cluster, next);
+
+	if(clear) {
+		/* Zero new cluster */
+		uint32_t sector = fat_first_sector_of_cluster(
+				h, cluster);
+		memset(_fat_sector_buf, 0, h->bytes_per_sector);
+		for(int i = 0; i < h->sectors_per_cluster; i++) 
+			block_write_sectors(h->dev, sector + i, 1, 
+						_fat_sector_buf); 
+	}
 
 	return next;
 }
@@ -197,14 +218,10 @@ int fat_write(struct fat_file_handle *h, const void *buf, int size)
 			continue;
 		if((sector % h->fat->sectors_per_cluster) == 0) {
 			/* Go to next cluster... */
-			uint32_t next_cluster = _fat_get_next_cluster(h->fat, 
-						h->cur_cluster);
-			if(next_cluster == fat_eoc(h->fat)) {
-				next_cluster = fat_alloc_next_cluster(h->fat,
-						h->cur_cluster);
-				if(!next_cluster)
-					break;
-			}
+			uint32_t next_cluster = fat_alloc_next_cluster(h->fat, 
+						h->cur_cluster, 0);
+			if(!next_cluster)
+				break;
 			h->cur_cluster = next_cluster;
 			sector = fat_first_sector_of_cluster(h->fat, 
 						h->cur_cluster);
@@ -241,7 +258,7 @@ int fat_unlink(const struct fat_vol_handle *vol, const char *name)
 	struct fat_file_handle h;
 
 	fat_open(vol, name, 0, &h);
-	/* Don't try to remove the root directory */
+	/* Don't try to unlink directories, use fat_rmdir() instead. */
 	if(!h.dirent_sector)
 		return -EISDIR;
 
@@ -256,5 +273,133 @@ int fat_unlink(const struct fat_vol_handle *vol, const char *name)
 	/* FIXME: Remove long name entries. */
 
 	return 0;
+}
+
+/* Build a short name for a long name.  n is used if name is too long. */
+static void build_short_name(uint8_t *sname, const char *name, int n)
+{
+	int i, j;
+
+	memset(sname, ' ', 11);
+	for(i = 0; (i < 8) && name[i] && (name[i] != '.'); i++) 
+		sname[i] = toupper(name[i]);
+	
+	char *suffix = strrchr(name, '.');
+	if(suffix) for(j = 1; (j < 4) && suffix[j]; j++) 
+		sname[j+7] = toupper(suffix[j]);
+
+	if(((i == 8) && (name[i] != '.')) ||
+	   ((suffix - name) != i)) {
+		if(i > 6) 
+			i = 6;
+		sname[i] = '~';
+		sname[i+1] = '0' + (n % 10);
+	}
+}
+
+/* Create a new zero-length file */
+int _fat_dir_create_file(struct fat_vol_handle *vol, const char *name,
+		uint8_t attr, struct fat_file_handle *file)
+{
+	/* Check if file already exists */
+	if(!fat_open(vol, name, 0, file)) 
+		return -1; /* File exists */
+
+	/* Attempt to construct a short name for the file */
+	uint8_t sname[12];
+	sname[11] = 0; /* fat_open() needs terminating null */
+	for(int i = 1; i < 10; i++) {
+		build_short_name(sname, name, i);
+		if(fat_open(vol, sname, 0, file)) 
+			break; /* We have a winner */
+		sname[0] = ' ';
+	}
+
+	if(sname[0] == ' ')
+		return -1; /* Couldn't find a short name */
+
+	printf("Using short name '%s'\n", sname);
+	/* vol->cwd already points to end of directory to add entry */
+	/* FIXME: use deleted entries if possible */
+	printf("Writing at offset %x\n", vol->cwd.position);
+
+	/* Create long name directory entries */
+	struct fat_ldirent ld;
+	int last = 1;
+	memset(&ld, 0, sizeof(ld));
+	ld.attr = FAT_ATTR_LONG_NAME;
+	for(int i = strlen(name) / 13; i >= 0; i--) {
+		ld.ord = i + 1;
+		if(last) {
+			ld.ord |= FAT_LAST_LONG_ENTRY;
+			last = 0;
+		}
+		int j;
+		for(j = 0; j < 5; j++) 
+			__put_le16(&ld.name1[j], name[i*13 + j]);
+		for(j = 0; j < 6; j++) 
+			__put_le16(&ld.name2[j], name[i*13 + j + 5]);
+		for(j = 0; j < 2; j++) 
+			__put_le16(&ld.name3[j], name[i*13 + j + 11]);
+		ld.checksum = _fat_dirent_chksum(sname);
+		fat_write(&vol->cwd, &ld, sizeof(ld));
+	}
+
+	/* Create short name entry */
+	struct fat_sdirent fatent;
+	memset(&fatent, 0, sizeof(fatent));
+	fatent.attr = attr;
+	memcpy(&fatent.name, sname, 11);
+	/* TODO: Insert timestamp */
+	if(attr == FAT_ATTR_DIRECTORY) {
+		/* Allocate a cluster for directories */
+		uint32_t cluster = fat_find_free_cluster(vol);
+		if(!cluster) 
+			return -1;
+		fat_set_next_cluster(vol, cluster, fat_eoc(vol));
+		__put_le16(&fatent.cluster_hi, cluster >> 16);
+		__put_le16(&fatent.cluster_lo, cluster & 0xFFFF);
+		printf("Allocated cluster %d\n", cluster);
+	}
+	fat_write(&vol->cwd, &fatent, sizeof(fatent));
+
+	printf("\n");
+
+	return fat_open(vol, name, 0, file);
+}
+
+int fat_mkdir(struct fat_vol_handle *vol, const char *name)
+{
+	int ret;
+	struct fat_file_handle dir;
+	struct fat_sdirent fatent;
+	ret = _fat_dir_create_file(vol, name, FAT_ATTR_DIRECTORY, &dir);
+	if(ret) 
+		return ret;
+
+	/* Clear out cluster */
+	memset(_fat_sector_buf, 0, vol->bytes_per_sector);
+	uint32_t sector = fat_first_sector_of_cluster(vol, dir.first_cluster);
+	for(int i = 0; i < vol->sectors_per_cluster; i++) 
+		block_write_sectors(vol->dev, sector + i, 1, _fat_sector_buf);
+
+	memset(&fatent, 0, sizeof(fatent));
+	fatent.attr = FAT_ATTR_DIRECTORY;
+	memset(fatent.name, ' ', 11);
+
+	/* Create '.' entry */
+	fatent.name[0] = '.';
+	__put_le16(&fatent.cluster_hi, dir.first_cluster >> 16);
+	__put_le16(&fatent.cluster_lo, dir.first_cluster & 0xFFFF);
+	ret = fat_write(&dir, &fatent, sizeof(fatent));
+	if(ret < 0) 
+		return ret;
+
+	/* Create '..' entry */
+	fatent.name[1] = '.';
+	__put_le16(&fatent.cluster_hi, vol->cwd.first_cluster >> 16);
+	__put_le16(&fatent.cluster_lo, vol->cwd.first_cluster & 0xFFFF);
+	ret = fat_write(&dir, &fatent, sizeof(fatent));
+	return (ret < 0) ? ret : 0;
 }
 
