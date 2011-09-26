@@ -196,8 +196,14 @@ int fat_write(struct fat_file_handle *h, const void *buf, int size)
 		 */
 	}
 
-	sector = fat_first_sector_of_cluster(h->fat, h->cur_cluster);
-	sector += (h->position / h->fat->bytes_per_sector) % h->fat->sectors_per_cluster;
+	if(h->root_flag) {
+		/* FAT12/FAT16 root directory */
+		sector = h->cur_cluster + 
+			(h->position / h->fat->bytes_per_sector);
+	} else {
+		sector = fat_first_sector_of_cluster(h->fat, h->cur_cluster);
+		sector += (h->position / h->fat->bytes_per_sector) % h->fat->sectors_per_cluster;
+	}
 	offset = h->position % h->fat->bytes_per_sector;
 
 	for(i = 0; i < size; ) {
@@ -397,8 +403,13 @@ int fat_mkdir(struct fat_vol_handle *vol, const char *name)
 
 	/* Create '..' entry */
 	fatent.name[1] = '.';
-	__put_le16(&fatent.cluster_hi, vol->cwd.first_cluster >> 16);
-	__put_le16(&fatent.cluster_lo, vol->cwd.first_cluster & 0xFFFF);
+	if(!vol->cwd.root_flag) {
+		__put_le16(&fatent.cluster_hi, vol->cwd.first_cluster >> 16);
+		__put_le16(&fatent.cluster_lo, vol->cwd.first_cluster & 0xFFFF);
+	} else {
+		fatent.cluster_hi = 0;
+		fatent.cluster_lo = 0;
+	}
 	ret = fat_write(&dir, &fatent, sizeof(fatent));
 	return (ret < 0) ? ret : 0;
 }

@@ -292,6 +292,9 @@ int fat_open(const struct fat_vol_handle *vol, const char *name, int flags,
 #endif
 		  ) {
 			_fat_file_init(dir->fat, fatent, file);
+			/* Check for special case of root dir */
+			if(!file->first_cluster) 
+				_fat_file_root(dir->fat, file);
 			if(!(fatent->attr & FAT_ATTR_DIRECTORY)) {
 				file->dirent_sector = sector;
 				file->dirent_offset = offset;
