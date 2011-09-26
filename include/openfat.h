@@ -45,7 +45,7 @@ int fat_mkdir(struct fat_vol_handle *vol, const char *name);
 int fat_rmdir(struct fat_vol_handle *vol, const char *name); /* TODO */
 
 /* Open a file */
-int fat_open(const struct fat_vol_handle *vol, const char *name, int flags,
+int fat_open(struct fat_vol_handle *vol, const char *name, int flags,
 		  struct fat_file_handle *file);
 /* Read from a file */
 int fat_read(struct fat_file_handle *h, void *buf, int size);
@@ -54,7 +54,7 @@ int fat_write(struct fat_file_handle *h, const void *buf, int size);
 /* Seek in a file */
 off_t fat_lseek(struct fat_file_handle *h, off_t offset, int whence);
 /* Unlink/delete a file */
-int fat_unlink(const struct fat_vol_handle *vol, const char *name);
+int fat_unlink(struct fat_vol_handle *vol, const char *name);
 
 #define FAT_ATTR_READ_ONLY	0x01
 #define FAT_ATTR_HIDDEN		0x02

@@ -23,6 +23,7 @@
 
 #include <string.h>
 #include <ctype.h>
+#include <fcntl.h>
 
 #include "openfat.h"
 
@@ -99,7 +100,7 @@ int fat_readdir(struct fat_file_handle *h, struct dirent *ent)
 	int i, j;
 
 	if(h->cur_cluster == fat_eoc(h->fat)) 
-		return 0;
+		return -1;
 
 	if(h->root_flag) {
 		/* FAT12/FAT16 root directory */
@@ -122,7 +123,7 @@ int fat_readdir(struct fat_file_handle *h, struct dirent *ent)
 				h->cur_cluster = _fat_get_next_cluster(h->fat, 
 							h->cur_cluster);
 				if(h->cur_cluster == fat_eoc(h->fat)) 
-					return 0;
+					return -1;
 				sector = fat_first_sector_of_cluster(h->fat, 
 							h->cur_cluster);
 			}
@@ -134,7 +135,7 @@ int fat_readdir(struct fat_file_handle *h, struct dirent *ent)
 		h->position += 32;
 
 		if(fatent->name[0] == 0) 
-			return 0;	/* Empty entry, end of directory */
+			return -1;	/* Empty entry, end of directory */
 		if(fatent->name[0] == (char)0xe5)
 			continue;	/* Deleted entry */
 		if(fatent->attr == FAT_ATTR_LONG_NAME) {
@@ -184,9 +185,9 @@ int fat_readdir(struct fat_file_handle *h, struct dirent *ent)
 		/* Non-standard */
 		ent->fat_attr = fatent->attr;
 
-		return 1;
+		return 0;
 	}
-	return 0;
+	return -1;
 }
 
 int fat_comparesfn(const char * name, const char *fatname)
@@ -209,7 +210,7 @@ int fat_comparesfn(const char * name, const char *fatname)
 	return ((*name == 0) || (*name == '/')) && !memcmp(canonname, fatname, 11);
 }
 
-int fat_open(const struct fat_vol_handle *vol, const char *name, int flags,
+int fat_open(struct fat_vol_handle *vol, const char *name, int flags,
 		struct fat_file_handle *file)
 {
 #ifdef LONG_NAME_SUPPORT
@@ -244,7 +245,7 @@ int fat_open(const struct fat_vol_handle *vol, const char *name, int flags,
 							dir->cur_cluster);
 				/* End of cluster chain: file not found */
 				if(next == fat_eoc(dir->fat)) 
-					return -1;
+					break;
 				dir->cur_cluster = next;
 				sector = fat_first_sector_of_cluster(dir->fat, 
 							dir->cur_cluster);
@@ -256,7 +257,7 @@ int fat_open(const struct fat_vol_handle *vol, const char *name, int flags,
 		struct fat_sdirent *fatent = (void*)&_fat_sector_buf[offset];
 
 		if(fatent->name[0] == 0)
-			return -1;	/* Empty entry, end of directory */
+			break;	/* Empty entry, end of directory */
 
 		dir->position += 32;
 
@@ -292,16 +293,19 @@ int fat_open(const struct fat_vol_handle *vol, const char *name, int flags,
 #endif
 		  ) {
 			_fat_file_init(dir->fat, fatent, file);
-			/* Check for special case of root dir */
-			if(!file->first_cluster) 
-				_fat_file_root(dir->fat, file);
 			if(!(fatent->attr & FAT_ATTR_DIRECTORY)) {
 				file->dirent_sector = sector;
 				file->dirent_offset = offset;
+			} else if(!file->first_cluster) {
+				/* Check for special case of root dir */
+				_fat_file_root(dir->fat, file);
 			}
 			return 0;
 		}
 	}
+	if(flags & O_CREAT) 
+		return _fat_dir_create_file(vol, name, FAT_ATTR_ARCHIVE,
+					file);
 	return -1;
 }
 

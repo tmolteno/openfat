@@ -25,6 +25,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <fcntl.h>
 
 #include <assert.h>
 
@@ -44,7 +45,7 @@ void print_tree(struct fat_vol_handle *vol, struct fat_file_handle *dir,
 	char tmppath[1024];
 	struct fat_file_handle subdir;
 
-	while(fat_readdir(dir, &ent)) {
+	while(!fat_readdir(dir, &ent)) {
 		if((strcmp(ent.d_name, ".") == 0) || 
 		   (strcmp(ent.d_name, "..") == 0))
 			continue;
@@ -65,23 +66,37 @@ int main(int argc, char *argv[])
 {
 	struct block_device *bldev;
 	struct fat_vol_handle fat;
-	struct fat_file_handle root;
+	struct fat_file_handle root, file;
 	struct stat st;
 	char *rootpath = argc > 2 ? argv[2] : "/";
 
-	bldev = block_device_file_new(argc > 1 ? argv[1] : "fat32.img", "r");
+	bldev = block_device_file_new(argc > 1 ? argv[1] : "fat32.img", "r+");
 	assert(bldev != NULL);
 
 	fat_vol_init(bldev, &fat);
 	fprintf(stderr, "Fat type is FAT%d\n", fat.type);
 
-	if(!fat_path_open(&fat, rootpath, &root)) {
+	if(fat_path_open(&fat, rootpath, &root)) {
 		fprintf(stderr, "Failed to find file: %s\n", rootpath);
 		return -1;
 	}
 
 	fat_file_stat(&root, &st);
 	if(S_ISDIR(st.st_mode)) {
+		fat_mkdir(&fat, "Directory1");
+		fat_mkdir(&fat, "Directory2");
+		fat_mkdir(&fat, "Directory3");
+		assert(fat_chdir(&fat, "Directory1") == 0);
+		fat_mkdir(&fat, "Directory1");
+		fat_mkdir(&fat, "Directory2");
+		fat_mkdir(&fat, "Directory3");
+		assert(fat_open(&fat, "Message file with a long name.txt", O_CREAT, &file) == 0);
+		for(int i = 0; i < 100; i++) {
+			char message[80];
+			sprintf(message, "Here is a message %d\n", i);
+			fat_write(&file, message, strlen(message));
+		}
+		assert(fat_chdir(&fat, "..") == 0);
 		print_tree(&fat, &root, rootpath[0] == '/' ? rootpath + 1 : rootpath);
 	} else {
 		char *buf = malloc(st.st_size);

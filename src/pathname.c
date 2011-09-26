@@ -31,7 +31,7 @@ int fat_path_open(struct fat_vol_handle *fat, const char *path,
 		struct fat_file_handle *h)
 {
 	if(!path || (path[0] == 0)) 
-		return 0;
+		return -1;
 
 	if(path[0] == '/') {
 		_fat_file_root(fat, h);
@@ -43,12 +43,12 @@ int fat_path_open(struct fat_vol_handle *fat, const char *path,
 
 	while(path && *path) {
 		memcpy(&fat->cwd, h, sizeof(*h));
-		if(!fat_open(fat, path, 0, h)) 
-			return 0;
+		if(fat_open(fat, path, 0, h)) 
+			return -1;
 		path = strchr(path, '/');
 		if(path) path++;
 	};
 
-	return 1;
+	return 0;
 }
 

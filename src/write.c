@@ -259,7 +259,7 @@ static int fat_chain_unlink(const struct fat_vol_handle *vol, uint32_t cluster)
 	return ret;
 }
 
-int fat_unlink(const struct fat_vol_handle *vol, const char *name)
+int fat_unlink(struct fat_vol_handle *vol, const char *name)
 {
 	struct fat_file_handle h;
 
@@ -316,7 +316,7 @@ int _fat_dir_create_file(struct fat_vol_handle *vol, const char *name,
 	sname[11] = 0; /* fat_open() needs terminating null */
 	for(int i = 1; i < 10; i++) {
 		build_short_name(sname, name, i);
-		if(fat_open(vol, sname, 0, file)) 
+		if(fat_open(vol, (char*)sname, 0, file)) 
 			break; /* We have a winner */
 		sname[0] = ' ';
 	}
@@ -324,10 +324,8 @@ int _fat_dir_create_file(struct fat_vol_handle *vol, const char *name,
 	if(sname[0] == ' ')
 		return -1; /* Couldn't find a short name */
 
-	printf("Using short name '%s'\n", sname);
 	/* vol->cwd already points to end of directory to add entry */
 	/* FIXME: use deleted entries if possible */
-	printf("Writing at offset %x\n", vol->cwd.position);
 
 	/* Create long name directory entries */
 	struct fat_ldirent ld;
@@ -365,7 +363,6 @@ int _fat_dir_create_file(struct fat_vol_handle *vol, const char *name,
 		fat_set_next_cluster(vol, cluster, fat_eoc(vol));
 		__put_le16(&fatent.cluster_hi, cluster >> 16);
 		__put_le16(&fatent.cluster_lo, cluster & 0xFFFF);
-		printf("Allocated cluster %d\n", cluster);
 	}
 	fat_write(&vol->cwd, &fatent, sizeof(fatent));
 
