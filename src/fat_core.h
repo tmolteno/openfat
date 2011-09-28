@@ -58,5 +58,15 @@ void _fat_file_init(const struct fat_vol_handle *fat, const struct fat_sdirent *
 int _fat_dir_create_file(struct fat_vol_handle *vol, const char *name,
 		uint8_t attr, struct fat_file_handle *file);
 
+#define FAT_GET_SECTOR(fat, sector)	do {\
+	if(block_read_sectors((fat)->dev, (sector), 1, _fat_sector_buf) != 1) \
+		return -EIO; \
+} while(0)
+
+#define FAT_PUT_SECTOR(fat, sector)	do {\
+	if(block_write_sectors((fat)->dev, (sector), 1, _fat_sector_buf) != 1) \
+		return -EIO; \
+} while(0)
+
 #endif
 

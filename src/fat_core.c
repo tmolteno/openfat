@@ -24,6 +24,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <unistd.h>
+#include <errno.h>
 
 #include "openfat.h"
 
@@ -37,14 +38,15 @@
 
 uint8_t _fat_sector_buf[MAX_SECTOR_SIZE];
 
-int fat_vol_init(const struct block_device *dev, struct fat_vol_handle *h)
+int fat_vol_init(const struct block_device *dev, struct fat_vol_handle *h) 
 {
 	struct bpb_common *bpb = (void *)&_fat_sector_buf;
 
 	memset(h, 0, sizeof(*h));
 	h->dev = dev;
 	
-	block_read_sectors(dev, 0, 1, _fat_sector_buf);
+	FAT_GET_SECTOR(h, 0);
+
 	h->type = fat_type(bpb);
 	h->cluster_count = _bpb_cluster_count(bpb);
 	h->bytes_per_sector = __get_le16(&bpb->bytes_per_sector);
@@ -81,14 +83,16 @@ uint32_t _fat_get_next_cluster(const struct fat_vol_handle *h, uint32_t cluster)
 	sector = h->reserved_sector_count + (offset / h->bytes_per_sector);
 	offset %= h->bytes_per_sector;
 
-	block_read_sectors(h->dev, sector, 1, _fat_sector_buf); 
+	if(block_read_sectors(h->dev, sector, 1, _fat_sector_buf) != 1)
+		return -1; 
 
 	if(h->type == FAT_TYPE_FAT12) {
 		uint32_t next;
 		if(offset == (uint32_t)h->bytes_per_sector - 1) {
 			/* Fat entry is over sector boundary */
 			next = _fat_sector_buf[offset];
-			block_read_sectors(h->dev, sector + 1, 1, _fat_sector_buf); 
+			if(block_read_sectors(h->dev, sector + 1, 1, _fat_sector_buf) != 1)
+				return -1; 
 			next += _fat_sector_buf[0] << 8;
 		} else {
 			next = __get_le16((uint16_t*)(_fat_sector_buf + offset));
@@ -150,7 +154,7 @@ off_t fat_lseek(struct fat_file_handle *h, off_t offset, int whence)
 		return -1;
 	}
 
-	if(h->size && (offset > h->size))
+	if(h->size && ((uint32_t)offset > h->size))
 		offset = h->size;
 
 	h->position = offset;
@@ -189,7 +193,7 @@ int fat_read(struct fat_file_handle *h, void *buf, int size)
 
 	for(i = 0; i < size; ) {
 		uint16_t chunk = MIN(h->fat->bytes_per_sector - offset, size - i);
-		block_read_sectors(h->fat->dev, sector, 1, _fat_sector_buf); 
+		FAT_GET_SECTOR(h->fat, sector);
 		memcpy(buf + i, _fat_sector_buf + offset, chunk);
 		h->position += chunk;
 		i += chunk;

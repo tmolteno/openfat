@@ -49,14 +49,16 @@ block_get_sector_size(const struct block_device *dev)
 	return dev->get_sector_size(dev);
 }
 
-static inline int 
+/* Returns the number of sectors read or negative on error */
+static inline int __attribute__((warn_unused_result))
 block_read_sectors(const struct block_device *dev,
 		uint32_t sector, uint32_t count, void *buf)
 {
 	return dev->read_sectors(dev, sector, count, buf);
 }
 
-static inline int 
+/* Returns the number of sectors written or negative on error */
+static inline int __attribute__((warn_unused_result))
 block_write_sectors(const struct block_device *dev,
 		uint32_t sector, uint32_t count, const void *buf)
 {

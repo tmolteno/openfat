@@ -23,6 +23,7 @@
 
 #include <string.h>
 #include <ctype.h>
+#include <errno.h>
 #include <fcntl.h>
 
 #include "openfat.h"
@@ -111,7 +112,7 @@ int fat_readdir(struct fat_file_handle *h, struct dirent *ent)
 		sector += (h->position / h->fat->bytes_per_sector) % h->fat->sectors_per_cluster;
 	}
 	offset = h->position % h->fat->bytes_per_sector;
-	block_read_sectors(h->fat->dev, sector, 1, _fat_sector_buf); 
+	FAT_GET_SECTOR(h->fat, sector);
 
 	for(;; offset += 32) {
 		/* Read next sector if needed */
@@ -127,7 +128,7 @@ int fat_readdir(struct fat_file_handle *h, struct dirent *ent)
 				sector = fat_first_sector_of_cluster(h->fat, 
 							h->cur_cluster);
 			}
-			block_read_sectors(h->fat->dev, sector, 1, _fat_sector_buf);
+			FAT_GET_SECTOR(h->fat, sector);
 			offset = 0;
 		}
 		struct fat_sdirent *fatent = (void*)&_fat_sector_buf[offset];
@@ -231,7 +232,7 @@ int fat_open(struct fat_vol_handle *vol, const char *name, int flags,
 		dir->cur_cluster = dir->first_cluster;
 		sector = fat_first_sector_of_cluster(dir->fat, dir->cur_cluster);
 	}
-	block_read_sectors(dir->fat->dev, sector, 1, _fat_sector_buf); 
+	FAT_GET_SECTOR(dir->fat, sector);
 
 	for(offset = 0, dir->position = 0;; offset += 32) {
 		/* Read next sector if needed */
@@ -250,7 +251,7 @@ int fat_open(struct fat_vol_handle *vol, const char *name, int flags,
 				sector = fat_first_sector_of_cluster(dir->fat, 
 							dir->cur_cluster);
 			}
-			block_read_sectors(dir->fat->dev, sector, 1, _fat_sector_buf);
+			FAT_GET_SECTOR(dir->fat, sector);
 			offset = 0;
 		}
 

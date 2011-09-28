@@ -35,7 +35,8 @@ struct fat_vol_handle;
 struct fat_file_handle;
 
 /* Mount a FAT volume. */
-int fat_vol_init(const struct block_device *dev, struct fat_vol_handle *h);
+int __attribute__((warn_unused_result))
+fat_vol_init(const struct block_device *dev, struct fat_vol_handle *h);
 
 /* Change current working directory */
 int fat_chdir(struct fat_vol_handle *vol, const char *name);
@@ -45,12 +46,15 @@ int fat_mkdir(struct fat_vol_handle *vol, const char *name);
 int fat_rmdir(struct fat_vol_handle *vol, const char *name); /* TODO */
 
 /* Open a file */
-int fat_open(struct fat_vol_handle *vol, const char *name, int flags,
+int __attribute__((warn_unused_result))
+fat_open(struct fat_vol_handle *vol, const char *name, int flags,
 		  struct fat_file_handle *file);
 /* Read from a file */
-int fat_read(struct fat_file_handle *h, void *buf, int size);
+int __attribute__((warn_unused_result))
+fat_read(struct fat_file_handle *h, void *buf, int size);
 /* Write to a file */
-int fat_write(struct fat_file_handle *h, const void *buf, int size);
+int __attribute__((warn_unused_result))
+fat_write(struct fat_file_handle *h, const void *buf, int size);
 /* Seek in a file */
 off_t fat_lseek(struct fat_file_handle *h, off_t offset, int whence);
 /* Unlink/delete a file */

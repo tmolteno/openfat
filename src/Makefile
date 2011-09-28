@@ -3,7 +3,8 @@ TARGET = libopenfat.a
 CC = $(CROSS_COMPILE)gcc
 AR = $(CROSS_COMPILE)ar
 
-CFLAGS += -g3 -MD -Wall -Wextra -std=gnu99 -I../include
+CFLAGS += -g3 -MD -Wall -Wextra -std=gnu99 -I../include \
+	-Werror
 
 SRC = fat_core.c direntry.c mbr.c pathname.c stat.c write.c
 

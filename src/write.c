@@ -50,14 +50,16 @@ fat32_set_next_cluster(const struct fat_vol_handle *h, uint8_t fat,
 		(offset / h->bytes_per_sector);
 	offset %= h->bytes_per_sector;
 
-	block_read_sectors(h->dev, sector, 1, _fat_sector_buf); 
+	if(block_read_sectors(h->dev, sector, 1, _fat_sector_buf) != 1)
+		return -1; 
 
 	/* Preserve high nybble */
 	next &= 0x0FFFFFFF;
 	next |= __get_le32((uint32_t*)(_fat_sector_buf + offset)) & 0xF0000000;
 	__put_le32((uint32_t*)(_fat_sector_buf + offset), next);
 
-	block_write_sectors(h->dev, sector, 1, _fat_sector_buf); 
+	if(block_write_sectors(h->dev, sector, 1, _fat_sector_buf) != 1)
+		return -1; 
 
 	return 0;
 }
@@ -73,9 +75,11 @@ fat16_set_next_cluster(const struct fat_vol_handle *h, uint8_t fat,
 		(offset / h->bytes_per_sector);
 	offset %= h->bytes_per_sector;
 
-	block_read_sectors(h->dev, sector, 1, _fat_sector_buf); 
+	if(block_read_sectors(h->dev, sector, 1, _fat_sector_buf) != 1)
+		return -1; 
 	__put_le16((uint16_t*)(_fat_sector_buf + offset), next);
-	block_write_sectors(h->dev, sector, 1, _fat_sector_buf); 
+	if(block_write_sectors(h->dev, sector, 1, _fat_sector_buf) != 1)
+		return -1; 
 
 	return 0;
 }
@@ -90,19 +94,24 @@ fat12_set_next_cluster(const struct fat_vol_handle *h, uint8_t fat,
 		(offset / h->bytes_per_sector);
 	offset %= h->bytes_per_sector;
 
-	block_read_sectors(h->dev, sector, 1, _fat_sector_buf); 
+	if(block_read_sectors(h->dev, sector, 1, _fat_sector_buf) != 1)
+		return -1; 
 	if(offset == (uint32_t)h->bytes_per_sector - 1) {
 		if(cluster & 1) {
 			next <<= 4;
 			_fat_sector_buf[offset] &= 0x0F;
 			_fat_sector_buf[offset] |= next & 0xF0;
-			block_write_sectors(h->dev, sector, 1, _fat_sector_buf); 
-			block_read_sectors(h->dev, sector + 1, 1, _fat_sector_buf); 
+			if(block_write_sectors(h->dev, sector, 1, _fat_sector_buf) != 1)
+				return -1; 
+			if(block_read_sectors(h->dev, sector + 1, 1, _fat_sector_buf) != 1)
+				return -1; 
 			_fat_sector_buf[0] = next >> 8;
 		} else {
 			_fat_sector_buf[offset] = next & 0xFF;
-			block_write_sectors(h->dev, sector, 1, _fat_sector_buf); 
-			block_read_sectors(h->dev, sector + 1, 1, _fat_sector_buf); 
+			if(block_write_sectors(h->dev, sector, 1, _fat_sector_buf) != 1)
+				return -1; 
+			if(block_read_sectors(h->dev, sector + 1, 1, _fat_sector_buf) != 1)
+				return -1; 
 			_fat_sector_buf[0] &= 0xF0;
 			_fat_sector_buf[0] |= (next >> 8) & 0x0F;
 		}
@@ -116,7 +125,8 @@ fat12_set_next_cluster(const struct fat_vol_handle *h, uint8_t fat,
 		}
 		__put_le16((uint16_t*)(_fat_sector_buf + offset), next);
 	}
-	block_write_sectors(h->dev, sector, 1, _fat_sector_buf); 
+	if(block_write_sectors(h->dev, sector, 1, _fat_sector_buf) != 1)
+		return -1; 
 
 	return 0;
 }
@@ -167,9 +177,14 @@ static int32_t fat_alloc_next_cluster(const struct fat_vol_handle *h,
 		uint32_t sector = fat_first_sector_of_cluster(
 				h, cluster);
 		memset(_fat_sector_buf, 0, h->bytes_per_sector);
-		for(int i = 0; i < h->sectors_per_cluster; i++) 
-			block_write_sectors(h->dev, sector + i, 1, 
+		for(int i = 0; i < h->sectors_per_cluster; i++) {
+			/* How do we report failure here?
+			 * The cluster has already been allocated.
+			 */
+			int discard = block_write_sectors(h->dev, sector + i, 1, 
 						_fat_sector_buf); 
+			(void)discard;
+		}
 	}
 
 	return next;
@@ -209,10 +224,10 @@ int fat_write(struct fat_file_handle *h, const void *buf, int size)
 	for(i = 0; i < size; ) {
 		uint16_t chunk = MIN(h->fat->bytes_per_sector - offset, size - i);
 		if(chunk < h->fat->bytes_per_sector)
-			block_read_sectors(h->fat->dev, sector, 1, _fat_sector_buf); 
+			FAT_GET_SECTOR(h->fat, sector);
 
 		memcpy(_fat_sector_buf + offset, buf + i, chunk);
-		block_write_sectors(h->fat->dev, sector, 1, _fat_sector_buf); 
+		FAT_PUT_SECTOR(h->fat, sector);
 		h->position += chunk;
 		i += chunk;
 		if((h->position % h->fat->bytes_per_sector) != 0) 
@@ -237,12 +252,12 @@ int fat_write(struct fat_file_handle *h, const void *buf, int size)
 	if(h->dirent_sector && (h->position > h->size)) {
 		/* Update directory entry with new size */
 		h->size = h->position;
-		block_read_sectors(h->fat->dev, h->dirent_sector, 1, _fat_sector_buf); 
+		FAT_GET_SECTOR(h->fat, h->dirent_sector);
 		struct fat_sdirent *dirent = (void*)&_fat_sector_buf[h->dirent_offset];
 		__put_le32(&dirent->size, h->size);
 		__put_le16(&dirent->cluster_hi, h->first_cluster >> 16);
 		__put_le16(&dirent->cluster_lo, h->first_cluster & 0xFFFF);
-		block_write_sectors(h->fat->dev, h->dirent_sector, 1, _fat_sector_buf); 
+		FAT_PUT_SECTOR(h->fat, h->dirent_sector);
 	}
 
 	return i;
@@ -262,8 +277,12 @@ static int fat_chain_unlink(const struct fat_vol_handle *vol, uint32_t cluster)
 int fat_unlink(struct fat_vol_handle *vol, const char *name)
 {
 	struct fat_file_handle h;
+	int ret;
 
-	fat_open(vol, name, 0, &h);
+	ret = fat_open(vol, name, 0, &h);
+	if(ret)
+		return ret;
+
 	/* Don't try to unlink directories, use fat_rmdir() instead. */
 	if(!h.dirent_sector)
 		return -EISDIR;
@@ -272,9 +291,9 @@ int fat_unlink(struct fat_vol_handle *vol, const char *name)
 	fat_chain_unlink(vol, h.first_cluster); 
 
 	/* Mark directory entry as deleted */
-	block_read_sectors(vol->dev, h.dirent_sector, 1, _fat_sector_buf); 
+	FAT_GET_SECTOR(vol, h.dirent_sector);
 	_fat_sector_buf[h.dirent_offset] = 0xE5;
-	block_write_sectors(vol->dev, h.dirent_sector, 1, _fat_sector_buf); 
+	FAT_PUT_SECTOR(vol, h.dirent_sector);
 
 	/* FIXME: Remove long name entries. */
 
@@ -346,7 +365,8 @@ int _fat_dir_create_file(struct fat_vol_handle *vol, const char *name,
 		for(j = 0; j < 2; j++) 
 			__put_le16(&ld.name3[j], name[i*13 + j + 11]);
 		ld.checksum = _fat_dirent_chksum(sname);
-		fat_write(&vol->cwd, &ld, sizeof(ld));
+		if(fat_write(&vol->cwd, &ld, sizeof(ld)) != sizeof(ld))
+			return -1;
 	}
 
 	/* Create short name entry */
@@ -364,9 +384,8 @@ int _fat_dir_create_file(struct fat_vol_handle *vol, const char *name,
 		__put_le16(&fatent.cluster_hi, cluster >> 16);
 		__put_le16(&fatent.cluster_lo, cluster & 0xFFFF);
 	}
-	fat_write(&vol->cwd, &fatent, sizeof(fatent));
-
-	printf("\n");
+	if(fat_write(&vol->cwd, &fatent, sizeof(fatent)) != sizeof(fatent))
+		return -1;
 
 	return fat_open(vol, name, 0, file);
 }
@@ -384,7 +403,7 @@ int fat_mkdir(struct fat_vol_handle *vol, const char *name)
 	memset(_fat_sector_buf, 0, vol->bytes_per_sector);
 	uint32_t sector = fat_first_sector_of_cluster(vol, dir.first_cluster);
 	for(int i = 0; i < vol->sectors_per_cluster; i++) 
-		block_write_sectors(vol->dev, sector + i, 1, _fat_sector_buf);
+		FAT_PUT_SECTOR(vol, sector);
 
 	memset(&fatent, 0, sizeof(fatent));
 	fatent.attr = FAT_ATTR_DIRECTORY;

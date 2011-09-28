@@ -44,7 +44,8 @@ int mbr_partition_init(struct block_mbr_partition *part,
 {
 	struct mbr_partition *part_table = (void*)&_fat_sector_buf[446];
 	/* Read MBR from whole device */
-	block_read_sectors(whole, 0, 1, _fat_sector_buf);
+	if(block_read_sectors(whole, 0, 1, _fat_sector_buf) != 0)
+		return -1;
 	
 	part->whole = whole;
 

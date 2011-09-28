@@ -42,7 +42,8 @@ int fat_file_stat(struct fat_file_handle *h, struct stat *st)
 	}
 
 	/* Read direntry sector */
-	block_read_sectors(h->fat->dev, h->dirent_sector, 1, _fat_sector_buf);
+	if(block_read_sectors(h->fat->dev, h->dirent_sector, 1, _fat_sector_buf) != 1)
+		return -1;
 	fatent = (void*)&_fat_sector_buf[h->dirent_offset];
 	
 	/* TODO: Fill in timestamps */
