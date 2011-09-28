@@ -76,8 +76,16 @@ struct dirent {
 
 int fat_readdir(struct fat_file_handle *dir, struct dirent *ent);
 
+/* Unix like API */
+struct fat_vol_handle * ufat_mount(struct block_device *dev);
+
+struct fat_file_handle *
+ufat_open(struct fat_vol_handle *fat, const char *path, int flags);
+
+int ufat_stat(struct fat_file_handle *h, struct stat *stat);
+
+
 /* Working functions for now... may be removed */
-int fat_file_stat(struct fat_file_handle *h, struct stat *st);
 int fat_path_open(struct fat_vol_handle *fat, const char *path,
 		struct fat_file_handle *h) __attribute__((deprecated));
 

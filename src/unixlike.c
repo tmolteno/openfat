@@ -18,10 +18,9 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-/* Get status of open file
- */
 #include "openfat.h"
 
+#include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 
@@ -29,7 +28,49 @@
 #include "fat_core.h"
 #include "direntry.h"
 
-int fat_file_stat(struct fat_file_handle *h, struct stat *st)
+struct fat_vol_handle *
+ufat_mount(struct block_device *dev)
+{
+	struct fat_vol_handle *vol = malloc(sizeof(*vol));
+	
+	if(fat_vol_init(dev, vol)) {
+		free(vol);
+		return NULL;
+	}
+
+	return vol;
+}
+
+struct fat_file_handle *
+ufat_open(struct fat_vol_handle *fat, const char *path, int flags)
+{
+	if(!path || (path[0] == 0)) 
+		return NULL;
+
+	struct fat_file_handle *h = malloc(sizeof(*h));
+
+	if(path[0] == '/') {
+		_fat_file_root(fat, h);
+		path++;
+	} else {
+		/* TODO: Handle relative path */
+		_fat_file_root(fat, h);
+	}
+
+	while(path && *path) {
+		memcpy(&fat->cwd, h, sizeof(*h));
+		if(fat_open(fat, path, flags, h)) {
+			free(h);
+			return NULL;
+		}
+		path = strchr(path, '/');
+		if(path) path++;
+	};
+
+	return h;
+}
+
+int ufat_stat(struct fat_file_handle *h, struct stat *st)
 {
 	struct fat_sdirent *fatent;
 
