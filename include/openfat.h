@@ -28,7 +28,7 @@
 
 #include <sys/stat.h>
 
-#include "blockdev.h"
+#include "openfat/blockdev.h"
 
 /* Forward declarations of private structures. */
 struct fat_vol_handle;

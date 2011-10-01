@@ -24,7 +24,7 @@
 #include <string.h>
 #include <sys/stat.h>
 
-#include "blockdev.h"
+#include "openfat/blockdev.h"
 #include "fat_core.h"
 #include "direntry.h"
 

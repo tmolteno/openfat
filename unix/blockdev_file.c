@@ -28,7 +28,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "blockdev.h"
+#include "openfat/blockdev.h"
 
 #define FILE_SECTOR_SIZE 512
 

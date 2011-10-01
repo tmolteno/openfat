@@ -26,7 +26,7 @@
 #define __BPB_H
 
 #include <stdint.h>
-#include "leaccess.h"
+#include "openfat/leaccess.h"
 
 /* Boot sector fields common to FAT12/FAT16/FAT32 */
 struct bpb_common {

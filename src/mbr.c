@@ -23,9 +23,9 @@
 
 #include <stdint.h>
 
-#include "leaccess.h"
-#include "blockdev.h"
-#include "mbr.h"
+#include "openfat/leaccess.h"
+#include "openfat/blockdev.h"
+#include "openfat/mbr.h"
 
 /* In fat_core.c */
 extern uint8_t _fat_sector_buf[];

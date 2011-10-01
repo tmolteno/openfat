@@ -26,7 +26,7 @@ fat32.img:
 	dd if=/dev/zero of=$@ bs=512 count=81920
 	mkfs -t msdos -F 32 $@
 
-.PHONY: clean
+.PHONY: clean install
 
 clean:
 	-rm -rf *.o *.d fattest

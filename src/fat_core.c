@@ -28,8 +28,8 @@
 
 #include "openfat.h"
 
-#include "blockdev.h"
-#include "leaccess.h"
+#include "openfat/blockdev.h"
+#include "openfat/leaccess.h"
 #include "bpb.h"
 #include "fat_core.h"
 
