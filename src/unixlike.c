@@ -44,6 +44,8 @@ ufat_mount(struct block_device *dev)
 struct fat_file_handle *
 ufat_open(struct fat_vol_handle *fat, const char *path, int flags)
 {
+	struct fat_file_handle oldcwd;
+	
 	if(!path || (path[0] == 0)) 
 		return NULL;
 
@@ -53,19 +55,22 @@ ufat_open(struct fat_vol_handle *fat, const char *path, int flags)
 		_fat_file_root(fat, h);
 		path++;
 	} else {
-		/* TODO: Handle relative path */
-		_fat_file_root(fat, h);
+		memcpy(h, &fat->cwd, sizeof(*h));
 	}
 
+	memcpy(&oldcwd, &fat->cwd, sizeof(oldcwd));
 	while(path && *path) {
 		memcpy(&fat->cwd, h, sizeof(*h));
 		if(fat_open(fat, path, flags, h)) {
 			free(h);
+			memcpy(&fat->cwd, &oldcwd, sizeof(oldcwd));
 			return NULL;
 		}
 		path = strchr(path, '/');
 		if(path) path++;
 	};
+
+	memcpy(&fat->cwd, &oldcwd, sizeof(oldcwd));
 
 	return h;
 }

@@ -77,17 +77,22 @@ struct dirent {
 int fat_readdir(struct fat_file_handle *dir, struct dirent *ent);
 
 /* Unix like API */
+#include <stdlib.h>
+
 struct fat_vol_handle * ufat_mount(struct block_device *dev);
+static inline void ufat_umount(struct fat_vol_handle *vol) { free(vol); }
 
 struct fat_file_handle *
-ufat_open(struct fat_vol_handle *fat, const char *path, int flags);
+ufat_open(struct fat_vol_handle *vol, const char *path, int flags);
+static inline void ufat_close(struct fat_file_handle *file) { free(file); }
 
-int ufat_stat(struct fat_file_handle *h, struct stat *stat);
+int ufat_stat(struct fat_file_handle *file, struct stat *stat);
 
+#define ufat_read fat_read
+#define ufat_write fat_write
 
-/* Working functions for now... may be removed */
-int fat_path_open(struct fat_vol_handle *fat, const char *path,
-		struct fat_file_handle *h) __attribute__((deprecated));
+#define ufat_chdir fat_chdir
+#define ufat_mkdir fat_mkdir
 
 /* Everything below is private.  Applications should not direcly access
  * anything here.

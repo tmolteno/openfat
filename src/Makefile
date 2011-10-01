@@ -6,7 +6,7 @@ AR = $(CROSS_COMPILE)ar
 CFLAGS += -g3 -MD -Wall -Wextra -std=gnu99 -I../include \
 	-Werror
 
-SRC = fat_core.c direntry.c mbr.c pathname.c write.c unixlike.c
+SRC = fat_core.c direntry.c mbr.c write.c unixlike.c
 
 OBJ = $(SRC:.c=.o)
 
