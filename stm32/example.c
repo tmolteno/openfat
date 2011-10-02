@@ -1,5 +1,5 @@
 /*
- * This file is part of the openfatfs project.
+ * This file is part of the openfat project.
  *
  * Copyright (C) 2011  Department of Physics, University of Otago
  * Written by Gareth McMullin <gareth@blacksphere.co.nz>
@@ -25,12 +25,12 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+#include <assert.h>
+
 #include "openfat.h"
-#include "mbr.h"
+#include "openfat/mbr.h"
 
 #include "mmc.h"
-
-#include <sys/stat.h>
 
 void stm32_setup(void)
 {
@@ -66,7 +66,6 @@ void print_tree(struct fat_vol_handle *vol, struct fat_file_handle *dir, int nes
 {
 	struct fat_file_handle subdir;
 	struct dirent ent;
-	struct stat st;
 
 	while(fat_readdir(dir, &ent)) {
 		for(int i = 0; i < nest; i++) printf("\t");
@@ -74,7 +73,7 @@ void print_tree(struct fat_vol_handle *vol, struct fat_file_handle *dir, int nes
 
 		if(ent.fat_attr == FAT_ATTR_DIRECTORY) {
 			fat_chdir(vol, ent.d_name);
-			fat_open(vol, ".", 0, &subdir);
+			assert(fat_open(vol, ".", 0, &subdir) == 0);
 			print_tree(vol, &subdir, nest + 1);
 			fat_chdir(vol, "..");
 		}
@@ -101,10 +100,10 @@ int main(void)
 	mmc_init(SPI2, GPIOA, GPIO3, &spi2);
 	mbr_partition_init(&part, bldev, 0);
 
-	fat_vol_init(blpart, &fat);
+	assert(fat_vol_init(blpart, &fat) == 0);
 	printf("Fat type is FAT%d\n", fat.type);
 
-	fat_path_open(&fat, "/", &root);
+	assert(fat_open(&fat, ".", 0, &root) == 0);
 	print_tree(&fat, &root, 0);
 
 	while (1) {

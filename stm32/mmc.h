@@ -26,7 +26,7 @@
 
 #include <stdint.h>
 
-#include "blockdev.h"
+#include "openfat/blockdev.h"
 
 struct mmc_port {
 	struct block_device bldev;

@@ -9,7 +9,7 @@ CC = $(PREFIX)-gcc
 AR = $(PREFIX)-ar
 
 CFLAGS += -g3 -MD -Wall -Wextra -std=gnu99 -I../include \
-	-Werror
+	-Wno-char-subscripts -Werror
 
 SRC = fat_core.c direntry.c mbr.c write.c unixlike.c
 

@@ -28,7 +28,7 @@
 #include <string.h>
 
 #include "mmc.h"
-#include "leaccess.h"
+#include "openfat/leaccess.h"
 
 #define MMC_SECTOR_SIZE		512
 
