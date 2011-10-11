@@ -28,6 +28,18 @@
 
 extern uint8_t _fat_sector_buf[];
 
+extern struct _fat_cache {
+	/* Working sector buffer, use _fat_sector_buf by default. */
+	uint8_t *buf;
+
+	/* Sector and block device for current contents of buf. */
+	const void *bldev;
+	uint32_t sector;
+
+	/* Non-zero if buffer is out-of-sync with the physical medium. */
+	uint8_t dirty;
+} _fat_cache;
+
 static inline uint32_t
 fat_eoc(const struct fat_vol_handle *fat) 
 {
@@ -58,15 +70,33 @@ void _fat_file_init(const struct fat_vol_handle *fat, const struct fat_sdirent *
 int _fat_dir_create_file(struct fat_vol_handle *vol, const char *name,
 		uint8_t attr, struct fat_file_handle *file);
 
-#define FAT_GET_SECTOR(fat, sector)	do {\
-	if(block_read_sectors((fat)->dev, (sector), 1, _fat_sector_buf) != 1) \
+#define FAT_FLUSH_SECTOR() do {\
+	if(_fat_cache.dirty) \
+		if(block_write_sectors(_fat_cache.bldev, _fat_cache.sector, \
+					1, _fat_sector_buf) != 1) \
+			return -EIO; \
+	_fat_cache.dirty = 0; \
+} while(0)
+
+#define FAT_GET_SECTOR(fat, sectorn)	do {\
+	if((_fat_cache.bldev==(fat)->dev) && (_fat_cache.sector==(sectorn)))\
+		break; \
+\
+	FAT_FLUSH_SECTOR(); \
+\
+	_fat_cache.bldev = (fat)->dev; \
+	_fat_cache.sector = sectorn; \
+\
+	if(block_read_sectors((fat)->dev, (sectorn), 1, _fat_sector_buf) != 1)\
 		return -EIO; \
 } while(0)
 
-#define FAT_PUT_SECTOR(fat, sector)	do {\
-	if(block_write_sectors((fat)->dev, (sector), 1, _fat_sector_buf) != 1) \
-		return -EIO; \
+#define FAT_PUT_SECTOR(fat, sectorn)	do {\
+	_fat_cache.bldev = (fat)->dev; \
+	_fat_cache.sector = sectorn; \
+	_fat_cache.dirty = 1; \
 } while(0)
+
 
 #endif
 

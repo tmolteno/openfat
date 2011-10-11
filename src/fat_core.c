@@ -37,6 +37,7 @@
 #define MAX_SECTOR_SIZE 512
 
 uint8_t _fat_sector_buf[MAX_SECTOR_SIZE];
+struct _fat_cache _fat_cache;
 
 int fat_vol_init(const struct block_device *dev, struct fat_vol_handle *h) 
 {
@@ -83,16 +84,14 @@ uint32_t _fat_get_next_cluster(const struct fat_vol_handle *h, uint32_t cluster)
 	sector = h->reserved_sector_count + (offset / h->bytes_per_sector);
 	offset %= h->bytes_per_sector;
 
-	if(block_read_sectors(h->dev, sector, 1, _fat_sector_buf) != 1)
-		return -1; 
+	FAT_GET_SECTOR(h, sector);
 
 	if(h->type == FAT_TYPE_FAT12) {
 		uint32_t next;
 		if(offset == (uint32_t)h->bytes_per_sector - 1) {
 			/* Fat entry is over sector boundary */
 			next = _fat_sector_buf[offset];
-			if(block_read_sectors(h->dev, sector + 1, 1, _fat_sector_buf) != 1)
-				return -1; 
+			FAT_GET_SECTOR(h, sector + 1);
 			next += _fat_sector_buf[0] << 8;
 		} else {
 			next = __get_le16((uint16_t*)(_fat_sector_buf + offset));
