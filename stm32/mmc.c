@@ -147,34 +147,36 @@ static int mmc_read_sectors(const struct block_device *bldev,
 		uint32_t sector, uint32_t count, void *buf)
 {
 	const struct mmc_port *mmc = (void*)bldev;
+	uint32_t i;
  
 	mmc_select(mmc);
-	while(count--) {
+	for(i = 0; i < count; i++) {
 		mmc_command(mmc, MMC_READ_SINGLE_BLOCK, 
-				sector * MMC_SECTOR_SIZE);
+				(sector + i) * MMC_SECTOR_SIZE);
 		mmc_receive_block(mmc, buf, MMC_SECTOR_SIZE);
 		buf += MMC_SECTOR_SIZE;
 	}
 	mmc_release(mmc);
 
-	return 0;
+	return i;
 }
 
 static int mmc_write_sectors(const struct block_device *bldev,
 		uint32_t sector, uint32_t count, const void *buf)
 {
 	const struct mmc_port *mmc = (void*)bldev;
+	uint32_t i;
  
 	mmc_select(mmc);
-	while(count--) {
+	for(i = 0; i < count; i++) {
 		mmc_command(mmc, MMC_WRITE_BLOCK, 
-				sector * MMC_SECTOR_SIZE);
+				(sector + i) * MMC_SECTOR_SIZE);
 		mmc_transmit_block(mmc, buf, MMC_SECTOR_SIZE);
 		buf += MMC_SECTOR_SIZE;
 	}
 	mmc_release(mmc);
 
-	return 0;
+	return i;
 }
 
 int 

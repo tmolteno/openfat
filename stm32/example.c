@@ -24,6 +24,8 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
+#include <fcntl.h>
 
 #include <assert.h>
 
@@ -93,7 +95,7 @@ int main(void)
 	struct block_device *bldev = (void*)&spi2;
 	struct block_device *blpart = (void*)&part;
 	struct fat_vol_handle fat;
-	struct fat_file_handle root;
+	struct fat_file_handle root, file;
 
 	stm32_setup();
 
@@ -102,6 +104,16 @@ int main(void)
 
 	assert(fat_vol_init(blpart, &fat) == 0);
 	printf("Fat type is FAT%d\n", fat.type);
+
+	fat_mkdir(&fat, "Directory1");
+	assert(fat_chdir(&fat, "Directory1") == 0);
+	assert(fat_open(&fat, "Message file with a long name.txt", O_CREAT, &file) == 0);
+	for(int i = 0; i < 100; i++) {
+		char message[80];
+		sprintf(message, "Here is a message %d\n", i);
+		fat_write(&file, message, strlen(message));
+	}
+	assert(fat_chdir(&fat, "..") == 0);
 
 	assert(fat_open(&fat, ".", 0, &root) == 0);
 	print_tree(&fat, &root, 0);
