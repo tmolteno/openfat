@@ -96,52 +96,18 @@ int fat_readdir(struct fat_file_handle *h, struct dirent *ent)
 #ifdef LONG_NAME_SUPPORT
 	uint16_t csum = -1;
 #endif
-	uint32_t sector;
-	uint16_t offset;
+	struct fat_sdirent fatent;
 	int i, j;
 
-	if(h->cur_cluster == fat_eoc(h->fat)) 
-		return -1;
+	while(fat_read(h, &fatent, sizeof(fatent)) == sizeof(fatent)) {
 
-	if(h->root_flag) {
-		/* FAT12/FAT16 root directory */
-		sector = h->cur_cluster + 
-			(h->position / h->fat->bytes_per_sector);
-	} else {
-		sector = fat_first_sector_of_cluster(h->fat, h->cur_cluster);
-		sector += (h->position / h->fat->bytes_per_sector) % h->fat->sectors_per_cluster;
-	}
-	offset = h->position % h->fat->bytes_per_sector;
-	FAT_GET_SECTOR(h->fat, sector);
-
-	for(;; offset += 32) {
-		/* Read next sector if needed */
-		if(offset == h->fat->bytes_per_sector) {
-			sector++;
-			if(!h->root_flag && 
-			   ((sector % h->fat->sectors_per_cluster) == 0)) {
-				/* Go to next cluster... */
-				h->cur_cluster = _fat_get_next_cluster(h->fat, 
-							h->cur_cluster);
-				if(h->cur_cluster == fat_eoc(h->fat)) 
-					return -1;
-				sector = fat_first_sector_of_cluster(h->fat, 
-							h->cur_cluster);
-			}
-			FAT_GET_SECTOR(h->fat, sector);
-			offset = 0;
-		}
-		struct fat_sdirent *fatent = (void*)&_fat_sector_buf[offset];
-		//memcpy(&ent->fatent, _fat_sector_buf + offset, 32);
-		h->position += 32;
-
-		if(fatent->name[0] == 0) 
+		if(fatent.name[0] == 0) 
 			return -1;	/* Empty entry, end of directory */
-		if(fatent->name[0] == (char)0xe5)
+		if(fatent.name[0] == (char)0xe5)
 			continue;	/* Deleted entry */
-		if(fatent->attr == FAT_ATTR_LONG_NAME) {
+		if(fatent.attr == FAT_ATTR_LONG_NAME) {
 #ifdef LONG_NAME_SUPPORT
-			struct fat_ldirent *ld = (void*)fatent;
+			struct fat_ldirent *ld = (void*)&fatent;
 			if(ld->ord & FAT_LAST_LONG_ENTRY) {
 				memset(ent->d_name, 0, sizeof(ent->d_name));
 				csum = ld->checksum;
@@ -164,16 +130,16 @@ int fat_readdir(struct fat_file_handle *h, struct dirent *ent)
 			continue;
 		}
 #ifdef LONG_NAME_SUPPORT
-		if(csum != _fat_dirent_chksum((uint8_t*)fatent->name)) 
+		if(csum != _fat_dirent_chksum((uint8_t*)fatent.name)) 
 			ent->d_name[0] = 0;
 
 		if(ent->d_name[0] == 0) {
 #endif
 			for(i = 0, j = 0; i < 11; i++, j++) {
-				ent->d_name[j] = tolower(fatent->name[i]);
-				if(fatent->name[i] == ' ') {
+				ent->d_name[j] = tolower(fatent.name[i]);
+				if(fatent.name[i] == ' ') {
 					ent->d_name[j] = '.';
-					while((fatent->name[++i] == ' ') && (i < 11));
+					while((fatent.name[++i] == ' ') && (i < 11));
 				}
 			} 
 			if(ent->d_name[j-1] == '.')
@@ -184,7 +150,7 @@ int fat_readdir(struct fat_file_handle *h, struct dirent *ent)
 		}
 #endif
 		/* Non-standard */
-		ent->fat_attr = fatent->attr;
+		ent->fat_attr = fatent.attr;
 
 		return 0;
 	}

@@ -178,10 +178,6 @@ int fat_read(struct fat_file_handle *h, void *buf, int size)
 	uint32_t sector;
 	uint16_t offset;
 
-	/* Refuse to read from a directory.  Use *readdir instead */
-	if(h->root_flag || (h->size == 0)) 
-		return 0; 
-
 	sector = fat_first_sector_of_cluster(h->fat, h->cur_cluster);
 	sector += (h->position / h->fat->bytes_per_sector) % h->fat->sectors_per_cluster;
 	offset = h->position % h->fat->bytes_per_sector;
