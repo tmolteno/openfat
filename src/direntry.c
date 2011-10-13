@@ -65,30 +65,6 @@ static int ascii_from_utf16(char *ascii, const uint16_t *utf16, int count)
 	}
 	return 1;
 }
-
-/* Check ASCII and UTF-16 strings for equality.
- * 0 means terminating null reached.
- * 1 means matched to end on input.
- * 2 means mitmatch or conversion error.
- */
-static int 
-ascii_cmp_utf16(const char *ascii, const uint16_t *utf16, int count)
-{
-        while(count--) {
-                uint16_t u = __get_le16(utf16++);
-
-                /* Done on terminating null */
-                if(((*ascii == 0) || (*ascii == '/')) && (u == 0))
-                        return 0;
-
-                /* Check for mismatch or non-ascii */
-                if((u > 127) || (toupper(*ascii) != toupper(u)))
-                        return 2;
-
-		ascii++;
-        }
-        return 1;
-}
 #endif
 
 int fat_readdir(struct fat_file_handle *h, struct dirent *ent)
@@ -180,87 +156,29 @@ int fat_comparesfn(const char * name, const char *fatname)
 int fat_open(struct fat_vol_handle *vol, const char *name, int flags,
 		struct fat_file_handle *file)
 {
-#ifdef LONG_NAME_SUPPORT
-	uint16_t csum = -1;
-#endif
-	uint32_t sector;
-	uint16_t offset;
 	struct fat_file_handle *dir = (struct fat_file_handle*)&vol->cwd;
+	struct dirent dirent;
 
-	/* Fail if dir isn't a directory */
-	if(!dir->root_flag && dir->size)
-		return -1;
+	/* FIXME: Implement flags O_RDONLY, O_WRONLY, O_RDWR. */
+	(void)flags;
 
-	if(dir->root_flag) {
-		/* FAT12/FAT16 root directory */
-		sector = dir->first_cluster;
-	} else {
-		dir->cur_cluster = dir->first_cluster;
-		sector = fat_first_sector_of_cluster(dir->fat, dir->cur_cluster);
-	}
-	FAT_GET_SECTOR(dir->fat, sector);
-
-	for(offset = 0, dir->position = 0;; offset += 32) {
-		/* Read next sector if needed */
-		if(offset == dir->fat->bytes_per_sector) {
-			sector++;
-			if(!dir->root_flag && 
-			   ((sector % dir->fat->sectors_per_cluster) == 0)) {
-				/* Go to next cluster... */
-				uint32_t next = _fat_get_next_cluster(
-							dir->fat, 
-							dir->cur_cluster);
-				/* End of cluster chain: file not found */
-				if(next == fat_eoc(dir->fat)) 
-					break;
-				dir->cur_cluster = next;
-				sector = fat_first_sector_of_cluster(dir->fat, 
-							dir->cur_cluster);
-			}
-			FAT_GET_SECTOR(dir->fat, sector);
-			offset = 0;
-		}
-
-		struct fat_sdirent *fatent = (void*)&_fat_sector_buf[offset];
-
-		if(fatent->name[0] == 0)
-			break;	/* Empty entry, end of directory */
-
-		dir->position += 32;
-
-		if(fatent->name[0] == (char)0xe5)
-			continue;	/* Deleted entry */
-		if(fatent->attr == FAT_ATTR_LONG_NAME) {
-#ifdef LONG_NAME_SUPPORT
-			struct fat_ldirent *ld = (void*)fatent;
-			int i;
-
-			if(ld->ord & FAT_LAST_LONG_ENTRY)
-				csum = ld->checksum;
-			if(csum != ld->checksum) /* Abandon orphaned entry */
-				csum = -1;
-
-			i = ((ld->ord & 0x3f) - 1) * 13;
-
-			/* Compare LFN to name, trash csum if mismatch */
-			switch(ascii_cmp_utf16(&name[i], ld->name1, 5))
-				{ case 0: continue; case 2: csum = -1; }
-			switch(ascii_cmp_utf16(&name[i+5], ld->name2, 6))
-				{ case 0: continue; case 2: csum = -1; }
-			switch(ascii_cmp_utf16(&name[i+11], ld->name3, 2))
-				{ case 0: continue; case 2: csum = -1; }
-#endif
-			continue;
-		}
+	fat_lseek(dir, 0, SEEK_SET);
+	while(fat_readdir(dir, &dirent) == 0) {
 
 		/* Check for name match */
-		if(fat_comparesfn(name, fatent->name)
-#ifdef LONG_NAME_SUPPORT
-		  || (csum == _fat_dirent_chksum((uint8_t*)fatent->name))
-#endif
-		  ) {
-			_fat_file_init(dir->fat, fatent, file);
-			if(!(fatent->attr & FAT_ATTR_DIRECTORY)) {
+		if(strcmp(name, dirent.d_name) == 0) {
+			/* reread on-disk directory entry */
+			struct fat_sdirent fatent;
+			uint32_t sector;
+			uint16_t offset;
+			/* Rewind directory one entry */
+			fat_lseek(dir, -sizeof(fatent), SEEK_CUR);
+			_fat_file_sector_offset(dir, &sector, &offset);
+			if(fat_read(dir, &fatent, sizeof(fatent)) != 32)
+				return -1;
+
+			_fat_file_init(dir->fat, &fatent, file);
+			if(!(fatent.attr & FAT_ATTR_DIRECTORY)) {
 				file->dirent_sector = sector;
 				file->dirent_offset = offset;
 			} else if(!file->first_cluster) {
@@ -270,9 +188,7 @@ int fat_open(struct fat_vol_handle *vol, const char *name, int flags,
 			return 0;
 		}
 	}
-	if(flags & O_CREAT) 
-		return _fat_dir_create_file(vol, name, FAT_ATTR_ARCHIVE,
-					file);
+
 	return -1;
 }
 

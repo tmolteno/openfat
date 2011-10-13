@@ -67,6 +67,9 @@ void _fat_file_root(const struct fat_vol_handle *fat, struct fat_file_handle *h)
 void _fat_file_init(const struct fat_vol_handle *fat, const struct fat_sdirent *, 
 		struct fat_file_handle *h);
 
+void _fat_file_sector_offset(struct fat_file_handle *h, uint32_t *sector,
+			uint16_t *offset);
+
 int _fat_dir_create_file(struct fat_vol_handle *vol, const char *name,
 		uint8_t attr, struct fat_file_handle *file);
 

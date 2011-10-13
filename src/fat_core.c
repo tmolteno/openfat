@@ -147,8 +147,10 @@ off_t fat_lseek(struct fat_file_handle *h, off_t offset, int whence)
 		break;
 	case SEEK_CUR:
 		offset += h->position;
+		break;
 	case SEEK_END:
 		offset += h->size;
+		break;
 	default:
 		return -1;
 	}
@@ -171,6 +173,21 @@ off_t fat_lseek(struct fat_file_handle *h, off_t offset, int whence)
 	return h->position;
 }
 
+void _fat_file_sector_offset(struct fat_file_handle *h, uint32_t *sector,
+			uint16_t *offset)
+{
+	if(h->root_flag) {
+		/* FAT12/FAT16 root directory */
+		*sector = h->cur_cluster +
+				(h->position / h->fat->bytes_per_sector);
+	} else {
+		*sector = fat_first_sector_of_cluster(h->fat, h->cur_cluster);
+		*sector += (h->position / h->fat->bytes_per_sector) % 
+					h->fat->sectors_per_cluster;
+	}
+	*offset = h->position % h->fat->bytes_per_sector;
+}
+
 #define MIN(x, y) (((x) < (y))?(x):(y))
 int fat_read(struct fat_file_handle *h, void *buf, int size)
 {
@@ -178,9 +195,7 @@ int fat_read(struct fat_file_handle *h, void *buf, int size)
 	uint32_t sector;
 	uint16_t offset;
 
-	sector = fat_first_sector_of_cluster(h->fat, h->cur_cluster);
-	sector += (h->position / h->fat->bytes_per_sector) % h->fat->sectors_per_cluster;
-	offset = h->position % h->fat->bytes_per_sector;
+	_fat_file_sector_offset(h, &sector, &offset);
 
 	/* Don't read past end of file */
 	if(h->size && ((h->position + size) > h->size))
