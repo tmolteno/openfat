@@ -72,6 +72,7 @@ struct dirent {
 	char d_name[256];
 	/* Non-standard */
 	uint8_t fat_attr;	/* FAT file attributes */
+	char fat_sname[11];
 };
 
 int fat_readdir(struct fat_file_handle *dir, struct dirent *ent);

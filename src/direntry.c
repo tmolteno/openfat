@@ -127,16 +127,45 @@ int fat_readdir(struct fat_file_handle *h, struct dirent *ent)
 #endif
 		/* Non-standard */
 		ent->fat_attr = fatent.attr;
+		memcpy(ent->fat_sname, fatent.name, 11);
 
 		return 0;
 	}
 	return -1;
 }
 
-int fat_comparesfn(const char * name, const char *fatname)
+/* Seek to a place in the directory suitable for writing 'entries' new
+ * directory entries.  Called when creating files. */
+int _fat_dir_seek_empty(struct fat_file_handle *dir, int entries)
+{
+	uint32_t pos = 0;
+	struct fat_sdirent ent;
+	int i = 0;
+
+	fat_lseek(dir, 0, SEEK_SET);
+
+	while(fat_read(dir, &ent, sizeof(ent)) == sizeof(ent)) {
+		if(ent.name[0] == 0) /* Empty entry, end of directory */
+			break;
+		if(ent.name[0] == (char)0xe5) {	/* Deleted entry */
+			i++;
+			if(i == entries) 
+				break;
+			continue;	
+		}
+		i = 0;
+		pos = dir->position;
+	}
+
+	fat_lseek(dir, pos, SEEK_SET);
+	return 0;
+}
+
+static int fat_comparesfn(const char * name, const char *fatname)
 {
 	char canonname[11];
 	int i;
+
 	memset(canonname, ' ', sizeof(canonname));
 	if(name[0] == '.') {
 		/* Special case:
@@ -147,7 +176,7 @@ int fat_comparesfn(const char * name, const char *fatname)
 		if(*name == '.') {
 			if(i < 8) continue;
 			if(i == 8) name++;
-		}       
+		}
 		canonname[i] = toupper(*name++);
 	}
 	return ((*name == 0) || (*name == '/')) && !memcmp(canonname, fatname, 11);
@@ -166,7 +195,8 @@ int fat_open(struct fat_vol_handle *vol, const char *name, int flags,
 	while(fat_readdir(dir, &dirent) == 0) {
 
 		/* Check for name match */
-		if(strcmp(name, dirent.d_name) == 0) {
+		if((strcmp(name, dirent.d_name) == 0) ||
+		   fat_comparesfn(name, dirent.fat_sname)) {
 			/* reread on-disk directory entry */
 			struct fat_sdirent fatent;
 			uint32_t sector;
@@ -175,7 +205,7 @@ int fat_open(struct fat_vol_handle *vol, const char *name, int flags,
 			fat_lseek(dir, -sizeof(fatent), SEEK_CUR);
 			_fat_file_sector_offset(dir, &sector, &offset);
 			if(fat_read(dir, &fatent, sizeof(fatent)) != 32)
-				return -1;
+				return -EIO;
 
 			_fat_file_init(dir->fat, &fatent, file);
 			if(!(fatent.attr & FAT_ATTR_DIRECTORY)) {
@@ -188,8 +218,10 @@ int fat_open(struct fat_vol_handle *vol, const char *name, int flags,
 			return 0;
 		}
 	}
+	if(flags & O_CREAT)
+		return _fat_dir_create_file(vol, name, FAT_ATTR_ARCHIVE, file);
 
-	return -1;
+	return -ENOENT;
 }
 
 int fat_chdir(struct fat_vol_handle *vol, const char *name)

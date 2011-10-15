@@ -31,7 +31,6 @@
 static uint32_t fat_find_free_cluster(const struct fat_vol_handle *h)
 {
 	for(uint32_t i = 2; i < h->cluster_count; i++) {
-		/* FIXME: Read sectors here to save reads */
 		if(_fat_get_next_cluster(h, i) == 0)
 			return i;
 	}
@@ -203,18 +202,11 @@ int fat_write(struct fat_file_handle *h, const void *buf, int size)
 		 */
 	}
 
-	if(h->root_flag) {
-		/* FAT12/FAT16 root directory */
-		sector = h->cur_cluster + 
-			(h->position / h->fat->bytes_per_sector);
-	} else {
-		sector = fat_first_sector_of_cluster(h->fat, h->cur_cluster);
-		sector += (h->position / h->fat->bytes_per_sector) % h->fat->sectors_per_cluster;
-	}
-	offset = h->position % h->fat->bytes_per_sector;
+	_fat_file_sector_offset(h, &sector, &offset);
 
 	for(i = 0; i < size; ) {
-		uint16_t chunk = MIN(h->fat->bytes_per_sector - offset, size - i);
+		uint16_t chunk = MIN(h->fat->bytes_per_sector - offset, 
+					size - i);
 		if(chunk < h->fat->bytes_per_sector)
 			FAT_GET_SECTOR(h->fat, sector);
 		else
@@ -244,10 +236,11 @@ int fat_write(struct fat_file_handle *h, const void *buf, int size)
 	}
 
 	if(h->dirent_sector && (h->position > h->size)) {
+		struct fat_sdirent *dirent;
 		/* Update directory entry with new size */
 		h->size = h->position;
 		FAT_GET_SECTOR(h->fat, h->dirent_sector);
-		struct fat_sdirent *dirent = (void*)&_fat_sector_buf[h->dirent_offset];
+		dirent = (void*)&_fat_sector_buf[h->dirent_offset];
 		__put_le32(&dirent->size, h->size);
 		__put_le16(&dirent->cluster_hi, h->first_cluster >> 16);
 		__put_le16(&dirent->cluster_lo, h->first_cluster & 0xFFFF);
@@ -337,8 +330,8 @@ int _fat_dir_create_file(struct fat_vol_handle *vol, const char *name,
 	if(sname[0] == ' ')
 		return -1; /* Couldn't find a short name */
 
-	/* vol->cwd already points to end of directory to add entry */
-	/* FIXME: use deleted entries if possible */
+	/* Find usable space in parent directory */
+	_fat_dir_seek_empty(&vol->cwd, (strlen(name) / 13) + 1);
 
 	/* Create long name directory entries */
 	struct fat_ldirent ld;

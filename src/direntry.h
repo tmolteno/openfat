@@ -56,6 +56,7 @@ struct fat_ldirent {
 } __attribute__((packed));
 
 uint8_t _fat_dirent_chksum(uint8_t *dosname);
+int _fat_dir_seek_empty(struct fat_file_handle *dir, int entries);
 
 #endif
 
