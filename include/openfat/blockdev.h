@@ -18,7 +18,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-/* Block device abstraction.  
+/** \file blockdev.h
+ * \brief Block device abstraction.  
  * Must be implemented by application for a physical device.
  */
 
@@ -27,14 +28,20 @@
 
 #include <stdint.h>
 
+/** \brief Structure representing an abstract block device. 
+ * This abstraction must be provided by the application.
+ */
 struct block_device {
 	/* Info about the device */
+	/** \brief Method to get sector size. */
 	uint16_t (*get_sector_size)(const struct block_device *dev);
 	/* ... more to be added as needed ... */
 
 	/* Actions on the device */
+	/** \brief Method to read sectors. */
 	int (*read_sectors)(const struct block_device *dev, 
 			uint32_t sector, uint32_t count, void *buf);
+	/** \brief Method to write sectors. */
 	int (*write_sectors)(const struct block_device *dev, 
 			uint32_t sector, uint32_t count, const void *buf);
 	/* ... more to be added as needed ... */

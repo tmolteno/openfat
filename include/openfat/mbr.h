@@ -18,7 +18,12 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-/* Master boot record.
+/** \file mbr.h
+ * \brief PC Disk Partition Table implementation.
+ * This module provides interpretation of the PC Master Boot Record
+ * partition table, and provides a block device implementation for
+ * partitions given an implementation for the whole disk using wrapper
+ * functions.
  */
 
 #ifndef __MBR_H
@@ -37,6 +42,8 @@ struct mbr_partition {
 	uint32_t sector_count;
 } __attribute__((packed));
 
+/** \brief Structure representing block device for a PC disk partition.
+ * Don't access directly.  No public fields. */
 struct block_mbr_partition {
 	struct block_device bldev;
 	struct block_device *whole;
@@ -44,6 +51,12 @@ struct block_mbr_partition {
 	uint32_t sector_count;
 };
 
+/** \brief Initialise a partition block device.
+ * \param part Pointer to partition block device to initialize.
+ * \param whole Pointer to block device for whole media.
+ * \param part_index Partition index (0-3).
+ * \return 0 on success.
+ */
 int mbr_partition_init(struct block_mbr_partition *part, 
 			struct block_device *whole, uint8_t part_index);
 
