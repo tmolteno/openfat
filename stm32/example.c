@@ -21,6 +21,7 @@
 #include <libopencm3/stm32/rcc.h>
 #include <libopencm3/stm32/gpio.h>
 #include <libopencm3/stm32/spi.h>
+#include <libopencm3/stm32/systick.h>
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -62,6 +63,20 @@ void stm32_setup(void)
 	/* SD nCS pin is GPIOA 3 */
 	gpio_set_mode(GPIOA, GPIO_MODE_OUTPUT_10_MHZ, GPIO_CNF_OUTPUT_PUSHPULL,
 			GPIO3);
+
+	/* Enable Systick for benchmark timing */
+	/* 48MHz / 8 => 6000000 counts per second */
+	systick_set_clocksource(STK_CTRL_CLKSOURCE_AHB_DIV8); 
+	/* 6000000/6000 = 1000 overflows per second - every 1ms one interrupt */
+	systick_set_reload(6000);
+	systick_interrupt_enable();
+	/* start counting */
+	systick_counter_enable();
+
+	/* Enable LED output */
+	gpio_set_mode(GPIOB, GPIO_MODE_OUTPUT_10_MHZ, GPIO_CNF_OUTPUT_PUSHPULL,
+			GPIO12);
+	gpio_set(GPIOB, GPIO12);
 }
 
 void print_tree(struct fat_vol_handle *vol, struct fat_file_handle *dir, int nest)
@@ -69,7 +84,11 @@ void print_tree(struct fat_vol_handle *vol, struct fat_file_handle *dir, int nes
 	struct fat_file_handle subdir;
 	struct dirent ent;
 
-	while(fat_readdir(dir, &ent)) {
+	while(!fat_readdir(dir, &ent)) {
+		if((strcmp(ent.d_name, ".") == 0) || 
+		   (strcmp(ent.d_name, "..") == 0))
+			continue;
+
 		for(int i = 0; i < nest; i++) printf("\t");
 		printf("%s\n", ent.d_name);
 
@@ -123,4 +142,18 @@ int main(void)
 
 	return 0;
 }
+
+void sys_tick_handler()
+{
+	static int temp32;
+
+	temp32++;
+
+	/* we call this handler every 1ms so 1000ms = 1s on/off */
+	if (temp32 == 1000) {
+		gpio_toggle(GPIOB, GPIO12); /* LED2 on/off */
+		temp32 = 0;
+	}
+}
+
 

@@ -24,6 +24,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <errno.h>
+#include <unistd.h>
 #include <fcntl.h>
 
 #include "openfat.h"
@@ -81,6 +82,8 @@ int fat_readdir(struct fat_file_handle *h, struct dirent *ent)
 			return -1;	/* Empty entry, end of directory */
 		if(fatent.name[0] == (char)0xe5)
 			continue;	/* Deleted entry */
+		if(fatent.attr == FAT_ATTR_VOLUME_ID)
+			continue;	/* Ignore volume id entry */
 		if(fatent.attr == FAT_ATTR_LONG_NAME) {
 #ifdef LONG_NAME_SUPPORT
 			struct fat_ldirent *ld = (void*)&fatent;
@@ -190,6 +193,12 @@ int fat_open(struct fat_vol_handle *vol, const char *name, int flags,
 
 	/* FIXME: Implement flags O_RDONLY, O_WRONLY, O_RDWR. */
 	(void)flags;
+
+	if(strcmp(name, ".") == 0) {
+		/* Special case needed for root dir with no '.' entry */
+		memcpy(file, &vol->cwd, sizeof(*file));
+		return 0;
+	}
 
 	fat_lseek(dir, 0, SEEK_SET);
 	while(fat_readdir(dir, &dirent) == 0) {

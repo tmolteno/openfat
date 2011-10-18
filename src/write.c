@@ -166,7 +166,8 @@ static int32_t fat_alloc_next_cluster(const struct fat_vol_handle *h,
 	if(clear) {
 		/* Zero new cluster */
 		uint32_t sector = fat_first_sector_of_cluster(
-				h, cluster);
+				h, next);
+		FAT_FLUSH_SECTOR();
 		memset(_fat_sector_buf, 0, h->bytes_per_sector);
 		for(int i = 0; i < h->sectors_per_cluster; i++) {
 			/* How do we report failure here?
@@ -334,7 +335,7 @@ int _fat_dir_create_file(struct fat_vol_handle *vol, const char *name,
 		return -1; /* Couldn't find a short name */
 
 	/* Find usable space in parent directory */
-	_fat_dir_seek_empty(&vol->cwd, (strlen(name) / 13) + 1);
+	_fat_dir_seek_empty(&vol->cwd, (strlen(name) / 13) + 2);
 
 	/* Create long name directory entries */
 	struct fat_ldirent ld;
@@ -410,7 +411,8 @@ int fat_mkdir(struct fat_vol_handle *vol, const char *name)
 
 	/* Create '..' entry */
 	fatent.name[1] = '.';
-	if(!vol->cwd.root_flag) {
+	if((!vol->cwd.root_flag) &&
+	   (vol->fat32.root_cluster != vol->cwd.first_cluster)) {
 		__put_le16(&fatent.cluster_hi, vol->cwd.first_cluster >> 16);
 		__put_le16(&fatent.cluster_lo, vol->cwd.first_cluster & 0xFFFF);
 	} else {
