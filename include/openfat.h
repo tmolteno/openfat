@@ -66,15 +66,29 @@ int fat_mkdir(struct fat_vol_handle *vol, const char *name);
 int fat_rmdir(struct fat_vol_handle *vol, const char *name); /* TODO */
 
 /** \brief Open a file.
+ * The option O_ASYNC may be passed in flags to surpress the automatic
+ * updating of the files directory entry on writes.  fat_file_sync() must be
+ * called explicitly to update it in this case.
+ *
  * \param vol Pointer to FAT volume handle.
  * \param name File name in current directory to open.
- * \param flags O_RDONLY, O_WRONLY, or O_RDWR. (currently not immplemented)
+ * \param flags O_RDONLY, O_WRONLY, or O_RDWR. (currently not implemented)
  * \param file Pointer to file handle to initialise.
  * \return 0 on success.
  */
 int __attribute__((warn_unused_result))
 fat_open(struct fat_vol_handle *vol, const char *name, int flags,
 		  struct fat_file_handle *file);
+
+#define O_ASYNC 020000
+/** \brief Update an open files directory entry.
+ * This must be called explicitly if a file is opened with the flag O_ASYNC.
+ * In this case, updates to the directory entry are surpressed on writes to
+ * improve performance.
+ * \param file Pointer to file handle from which to read.
+ * \return 0 on success.
+ */
+int fat_file_sync(struct fat_file_handle *h);
 
 /** \brief Read from an open file.
  * \param file Pointer to file handle from which to read.
@@ -161,6 +175,7 @@ struct fat_file_handle {
 	uint32_t position;
 	uint32_t cur_cluster;	/* This is used for sector on FAT12/16 root */
 	uint8_t root_flag;	/* Flag to mark root directory on FAT12/16 */
+	int flags;
 	/* Reference to dirent */
 	uint32_t dirent_sector;
 	uint16_t dirent_offset;

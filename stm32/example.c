@@ -126,12 +126,14 @@ int main(void)
 
 	fat_mkdir(&fat, "Directory1");
 	assert(fat_chdir(&fat, "Directory1") == 0);
-	assert(fat_open(&fat, "Message file with a long name.txt", O_CREAT, &file) == 0);
+	assert(fat_open(&fat, "Message file with a long name.txt", 
+				O_CREAT | O_ASYNC, &file) == 0);
 	for(int i = 0; i < 100; i++) {
 		char message[80];
 		sprintf(message, "Here is a message %d\n", i);
 		fat_write(&file, message, strlen(message));
 	}
+	fat_file_sync(&file);
 	assert(fat_chdir(&fat, "..") == 0);
 
 	assert(fat_open(&fat, ".", 0, &root) == 0);

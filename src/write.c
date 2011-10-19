@@ -182,6 +182,20 @@ static int32_t fat_alloc_next_cluster(const struct fat_vol_handle *h,
 	return next;
 }
 
+int fat_file_sync(struct fat_file_handle *h)
+{
+	struct fat_sdirent *dirent;
+	/* Update directory entry with new size */
+	FAT_GET_SECTOR(h->fat, h->dirent_sector);
+	dirent = (void*)&_fat_sector_buf[h->dirent_offset];
+	__put_le32(&dirent->size, h->size);
+	__put_le16(&dirent->cluster_hi, h->first_cluster >> 16);
+	__put_le16(&dirent->cluster_lo, h->first_cluster & 0xFFFF);
+	FAT_PUT_SECTOR(h->fat, h->dirent_sector);
+	FAT_FLUSH_SECTOR();
+	return 0;
+}
+
 #define MIN(x, y) (((x) < (y))?(x):(y))
 int fat_write(struct fat_file_handle *h, const void *buf, int size)
 {
@@ -240,15 +254,10 @@ int fat_write(struct fat_file_handle *h, const void *buf, int size)
 	}
 
 	if(h->dirent_sector && (h->position > h->size)) {
-		struct fat_sdirent *dirent;
 		/* Update directory entry with new size */
 		h->size = h->position;
-		FAT_GET_SECTOR(h->fat, h->dirent_sector);
-		dirent = (void*)&_fat_sector_buf[h->dirent_offset];
-		__put_le32(&dirent->size, h->size);
-		__put_le16(&dirent->cluster_hi, h->first_cluster >> 16);
-		__put_le16(&dirent->cluster_lo, h->first_cluster & 0xFFFF);
-		FAT_PUT_SECTOR(h->fat, h->dirent_sector);
+		if(!(h->flags & O_ASYNC))
+			fat_file_sync(h);
 	}
 
 	return i;

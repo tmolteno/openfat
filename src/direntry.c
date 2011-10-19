@@ -192,7 +192,6 @@ int fat_open(struct fat_vol_handle *vol, const char *name, int flags,
 	struct dirent dirent;
 
 	/* FIXME: Implement flags O_RDONLY, O_WRONLY, O_RDWR. */
-	(void)flags;
 
 	if(strcmp(name, ".") == 0) {
 		/* Special case needed for root dir with no '.' entry */
@@ -217,6 +216,7 @@ int fat_open(struct fat_vol_handle *vol, const char *name, int flags,
 				return -EIO;
 
 			_fat_file_init(dir->fat, &fatent, file);
+			file->flags = flags;
 			if(!(fatent.attr & FAT_ATTR_DIRECTORY)) {
 				file->dirent_sector = sector;
 				file->dirent_offset = offset;
@@ -227,8 +227,11 @@ int fat_open(struct fat_vol_handle *vol, const char *name, int flags,
 			return 0;
 		}
 	}
-	if(flags & O_CREAT)
-		return _fat_dir_create_file(vol, name, FAT_ATTR_ARCHIVE, file);
+	if(flags & O_CREAT) {
+		int ret = _fat_dir_create_file(vol, name, FAT_ATTR_ARCHIVE, file);
+		file->flags = flags;
+		return ret;
+	}
 
 	return -ENOENT;
 }
