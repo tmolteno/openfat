@@ -395,7 +395,7 @@ int fat_mkdir(struct fat_vol_handle *vol, const char *name)
 	memset(_fat_sector_buf, 0, vol->bytes_per_sector);
 	uint32_t sector = fat_first_sector_of_cluster(vol, dir.first_cluster);
 	for(int i = 0; i < vol->sectors_per_cluster; i++) 
-		FAT_PUT_SECTOR(vol, sector);
+		FAT_PUT_SECTOR(vol, sector + i);
 
 	memset(&fatent, 0, sizeof(fatent));
 	fatent.attr = FAT_ATTR_DIRECTORY;

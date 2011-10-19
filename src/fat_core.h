@@ -88,15 +88,18 @@ int _fat_dir_create_file(struct fat_vol_handle *vol, const char *name,
 	FAT_FLUSH_SECTOR(); \
 \
 	_fat_cache.bldev = (fat)->dev; \
-	_fat_cache.sector = sectorn; \
+	_fat_cache.sector = (sectorn); \
 \
 	if(block_read_sectors((fat)->dev, (sectorn), 1, _fat_sector_buf) != 1)\
 		return -EIO; \
 } while(0)
 
 #define FAT_PUT_SECTOR(fat, sectorn)	do {\
+	if((_fat_cache.bldev!=(fat)->dev) || (_fat_cache.sector!=(sectorn)))\
+		FAT_FLUSH_SECTOR(); \
+\
 	_fat_cache.bldev = (fat)->dev; \
-	_fat_cache.sector = sectorn; \
+	_fat_cache.sector = (sectorn); \
 	_fat_cache.dirty = 1; \
 } while(0)
 
