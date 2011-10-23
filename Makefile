@@ -12,11 +12,14 @@ export PREFIX
 export CFLAGS
 export LDFLAGS
 
-.PHONY: all FORCE 
+.PHONY: all doc FORCE 
 
 all:
 	$(MAKE) -C src
 	$(MAKE) -C $(HOST)
+
+doc:
+	doxygen Doxyfile
 
 %: FORCE
 	$(MAKE) -C src $@

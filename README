@@ -1,6 +1,14 @@
-OpenFAT is a Fat filesystem code that integrates with libopenstm32
+OpenFAT is a FAT filesystem implementation for embedded processors.
 
-src/    - Openfat library code
-unix/	- Examples for a Unix host
-stm32/	- Examples for an STM32 host using libopenstm32
+See the Doxygen documentation for more information.
+To generate the docs type:
+ $ make doc
+And then look at doc/html/index.html
+
+The directories in this repostory are as follows:
+include/ - OpenFAT public interface header files.
+src/     - Openfat library code
+unix/    - Examples for a Unix host
+stm32/   - Examples for an STM32 host using libopenstm32
+doc/	 - Generated documentation.
 

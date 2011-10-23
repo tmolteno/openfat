@@ -14,7 +14,7 @@ OBJ = $(SRC:.c=.o)
 example.elf: $(OBJ) ../src/libopenfat.a
 	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
 
-.PHONY:	clean
+.PHONY:	clean install
 
 clean:
 	-rm -rf *.o *.d example.elf
