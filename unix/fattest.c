@@ -43,7 +43,7 @@ void print_tree(struct fat_vol_handle *vol, struct fat_file_handle *dir,
 {
 	struct dirent ent;
 	char tmppath[1024];
-	struct fat_file_handle *subdir;
+	struct fat_file_handle subdir;
 
 	while(!fat_readdir(dir, &ent)) {
 		if((strcmp(ent.d_name, ".") == 0) || 
@@ -53,11 +53,10 @@ void print_tree(struct fat_vol_handle *vol, struct fat_file_handle *dir,
 		puts(tmppath);
 		
 		if(ent.fat_attr == FAT_ATTR_DIRECTORY) {
-			ufat_chdir(vol, ent.d_name);
-			subdir = ufat_open(vol, ".", 0);
-			print_tree(vol, subdir, tmppath);
-			ufat_close(subdir);
-			ufat_chdir(vol, "..");
+			fat_chdir(vol, ent.d_name);
+			assert(fat_open(vol, ".", 0, &subdir) == 0);
+			print_tree(vol, &subdir, tmppath);
+			fat_chdir(vol, "..");
 		}
 	}
 
@@ -66,48 +65,33 @@ void print_tree(struct fat_vol_handle *vol, struct fat_file_handle *dir,
 int main(int argc, char *argv[])
 {
 	struct block_device *bldev;
-	struct fat_vol_handle *vol;
-	struct fat_file_handle *root, *file;
-	struct stat st;
+	FatVol vol;
+	FatFile file;
 	char *rootpath = argc > 2 ? argv[2] : "/";
 
 	bldev = block_device_file_new(argc > 1 ? argv[1] : "fat32.img", "r+");
 	assert(bldev != NULL);
 
-	vol = ufat_mount(bldev);
-	fprintf(stderr, "Fat type is FAT%d\n", vol->type);
+	assert(fat_vol_init(bldev, &vol) == 0);
+	fprintf(stderr, "Fat type is FAT%d\n", vol.type);
 
-	if((root = ufat_open(vol, rootpath, 0)) == NULL) {
-		fprintf(stderr, "Failed to open file: %s\n", rootpath);
-		return -1;
-	}
-
-	ufat_stat(root, &st);
-	if(S_ISDIR(st.st_mode)) {
-		ufat_mkdir(vol, "Directory1");
-		ufat_mkdir(vol, "Directory2");
-		ufat_mkdir(vol, "Directory3");
-		assert(ufat_chdir(vol, "Directory1") == 0);
-		ufat_mkdir(vol, "Directory1");
-		ufat_mkdir(vol, "Directory2");
-		ufat_mkdir(vol, "Directory3");
-		assert((file = ufat_open(vol, "Message file with a long name.txt", O_CREAT)) != NULL);
+	fat_mkdir(&vol, "Directory1");
+	fat_mkdir(&vol, "Directory2");
+	fat_mkdir(&vol, "Directory3");
+	assert(fat_chdir(&vol, "Directory1") == 0);
+	fat_mkdir(&vol, "Directory1");
+	fat_mkdir(&vol, "Directory2");
+	fat_mkdir(&vol, "Directory3");
+	if(fat_create(&vol, "Message file with a long name.txt", O_WRONLY, &file) == 0) {
 		for(int i = 0; i < 100; i++) {
 			char message[80];
 			sprintf(message, "Here is a message %d\n", i);
-			ufat_write(file, message, strlen(message));
+			assert(fat_write(&file, message, strlen(message)) == (int)strlen(message));
 		}
-		ufat_close(file);
-		assert(ufat_chdir(vol, "..") == 0);
-		print_tree(vol, root, rootpath[0] == '/' ? rootpath + 1 : rootpath);
-	} else {
-		char *buf = malloc(st.st_size);
-		ufat_read(root, buf, st.st_size);
-		fwrite(buf, st.st_size, 1, stdout);
-		fflush(stdout);
 	}
-	ufat_close(root);
-	ufat_umount(vol);
+	assert(fat_chdir(&vol, "..") == 0);
+	assert(fat_open(&vol, ".", O_RDONLY, &file) == 0);
+	print_tree(&vol, &file, rootpath[0] == '/' ? rootpath + 1 : rootpath);
 
 	block_device_file_destroy(bldev);
 }

@@ -227,12 +227,6 @@ int fat_open(struct fat_vol_handle *vol, const char *name, int flags,
 			return 0;
 		}
 	}
-	if(flags & O_CREAT) {
-		int ret = _fat_dir_create_file(vol, name, FAT_ATTR_ARCHIVE, file);
-		file->flags = flags;
-		return ret;
-	}
-
 	return -ENOENT;
 }
 

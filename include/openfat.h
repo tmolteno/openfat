@@ -32,8 +32,16 @@
 #include "openfat/blockdev.h"
 
 /* Forward declarations of private structures. */
-struct fat_vol_handle;
-struct fat_file_handle;
+
+/** \brief Structure used internally for FAT volume state.
+ * Do not access directly.  Structure has no public fields. 
+ */
+typedef struct fat_vol_handle FatVol;
+
+/** \brief Structure used internally for FAT file state.
+ * Do not access directly.  Structure has no public fields. 
+ */
+typedef struct fat_file_handle FatFile;
 
 /** \brief Mount a FAT volume. 
  *
@@ -44,31 +52,34 @@ struct fat_file_handle;
  * \return 0 on success.
  */
 int __attribute__((warn_unused_result))
-fat_vol_init(const struct block_device *dev, struct fat_vol_handle *vol);
+fat_vol_init(const struct block_device *dev, FatVol *vol);
 
 /** \brief Change current working directory. 
  * \param vol Pointer to FAT volume handle.
  * \param name Directory name to change to.  Relative to the current dir.
  * \return 0 on success.
  */
-int fat_chdir(struct fat_vol_handle *vol, const char *name);
+int fat_chdir(FatVol *vol, const char *name);
 /** \brief Create a new directory.
  * \param vol Pointer to FAT volume handle.
  * \param name Directory name to create.
  * \return 0 on success.
  */
-int fat_mkdir(struct fat_vol_handle *vol, const char *name);
+int fat_mkdir(FatVol *vol, const char *name);
 /** \brief Remove an empty directory.
  * \param vol Pointer to FAT volume handle.
  * \param name Directory name to remove.
  * \return 0 on success.
  */
-int fat_rmdir(struct fat_vol_handle *vol, const char *name); /* TODO */
+int fat_rmdir(FatVol *vol, const char *name); /* TODO */
 
-/** \brief Open a file.
+/** \brief Open an existing file.
  * The option O_ASYNC may be passed in flags to surpress the automatic
  * updating of the files directory entry on writes.  fat_file_sync() must be
  * called explicitly to update it in this case.
+ *
+ * This function uses a ::dirent on the stack for iterating over the directory.
+ * This is a fairly large structure.
  *
  * \param vol Pointer to FAT volume handle.
  * \param name File name in current directory to open.
@@ -77,18 +88,29 @@ int fat_rmdir(struct fat_vol_handle *vol, const char *name); /* TODO */
  * \return 0 on success.
  */
 int __attribute__((warn_unused_result))
-fat_open(struct fat_vol_handle *vol, const char *name, int flags,
-		  struct fat_file_handle *file);
+fat_open(FatVol *vol, const char *name, int flags, FatFile *file);
+
+/** \brief Create a new file.
+ * \see fat_open()
+ *
+ * \param vol Pointer to FAT volume handle.
+ * \param name File name in current directory to create.
+ * \param flags O_RDONLY, O_WRONLY, or O_RDWR. (currently not implemented)
+ * \param file Pointer to file handle to initialise.
+ * \return 0 on success.
+ */
+int __attribute__((warn_unused_result))
+fat_create(FatVol *vol, const char *name, int flags, FatFile *file);
 
 #define O_ASYNC 020000
-/** \brief Update an open files directory entry.
+/** \brief Update an open file's directory entry.
  * This must be called explicitly if a file is opened with the flag O_ASYNC.
  * In this case, updates to the directory entry are surpressed on writes to
  * improve performance.
  * \param file Pointer to file handle from which to read.
  * \return 0 on success.
  */
-int fat_file_sync(struct fat_file_handle *h);
+int fat_file_sync(FatFile *h);
 
 /** \brief Read from an open file.
  * \param file Pointer to file handle from which to read.
@@ -97,7 +119,7 @@ int fat_file_sync(struct fat_file_handle *h);
  * \return Number of bytes read on success, negative on error.
  */
 int __attribute__((warn_unused_result))
-fat_read(struct fat_file_handle *file, void *buf, int size);
+fat_read(FatFile *file, void *buf, int size);
 
 /** \brief Write to an open file.
  * \param file Pointer to file handle into which to write.
@@ -106,7 +128,7 @@ fat_read(struct fat_file_handle *file, void *buf, int size);
  * \return Number of bytes written on success, negative on error.
  */
 int __attribute__((warn_unused_result))
-fat_write(struct fat_file_handle *file, const void *buf, int size);
+fat_write(FatFile *file, const void *buf, int size);
 
 /** \brief Sets the position in an open file.
  * \param file Pointer to file handle to change.
@@ -114,14 +136,14 @@ fat_write(struct fat_file_handle *file, const void *buf, int size);
  * \param whence One of SEEK_SET, SEEK_CUR, SEEK_END.  See Unix documentation.
  * \return New file position on success, negative on error.
  */
-off_t fat_lseek(struct fat_file_handle *file, off_t offset, int whence);
+off_t fat_lseek(FatFile *file, off_t offset, int whence);
 
 /** \brief Unlink/delete a file.
  * \param vol Pointer to FAT volume handle.
  * \param name Name of file in current directory to unlink.
  * \return 0 on success.
  */
-int fat_unlink(struct fat_vol_handle *vol, const char *name);
+int fat_unlink(FatVol *vol, const char *name);
 
 #define FAT_ATTR_READ_ONLY	0x01
 #define FAT_ATTR_HIDDEN		0x02
@@ -131,7 +153,7 @@ int fat_unlink(struct fat_vol_handle *vol, const char *name);
 #define FAT_ATTR_ARCHIVE	0x20
 #define FAT_ATTR_LONG_NAME	0x0F
 
-/** \brief Public directory entry structure, returned by fat_readdir */
+/** \brief Public directory entry structure, returned by fat_readdir() */
 struct dirent {
 	char d_name[256];	/**< Long file name, POSIX standard. */
 	/* Non-standard */
@@ -139,33 +161,20 @@ struct dirent {
 	char fat_sname[11];	/**< DOS short filename, non-standard */
 };
 
-int fat_readdir(struct fat_file_handle *dir, struct dirent *ent);
+/** \brief Read a directory entry.
+ * The dirent structure is filled in with the details of the next file in
+ * the directory stream pointed to by dir.
+ * \param dir Pointer to file handle for the directory to be read.
+ * \param ent Pointer to dirent structure for the read entry.
+ * \return 0 on success.
+ */
+int fat_readdir(FatFile *dir, struct dirent *ent);
 
-/* Unix like API */
-#include <stdlib.h>
-
-struct fat_vol_handle * ufat_mount(struct block_device *dev);
-static inline void ufat_umount(struct fat_vol_handle *vol) { free(vol); }
-
-struct fat_file_handle *
-ufat_open(struct fat_vol_handle *vol, const char *path, int flags);
-static inline void ufat_close(struct fat_file_handle *file) { free(file); }
-
-int ufat_stat(struct fat_file_handle *file, struct stat *stat);
-
-#define ufat_read fat_read
-#define ufat_write fat_write
-
-#define ufat_chdir fat_chdir
-#define ufat_mkdir fat_mkdir
 
 /* Everything below is private.  Applications should not direcly access
  * anything here.
  */
 
-/** \brief Structure used internally for FAT file state.
- * Do not access directly.  Structure has no public fields. 
- */
 struct fat_file_handle {
 	const struct fat_vol_handle *fat;
 	/* Fields from dir entry */
@@ -181,9 +190,6 @@ struct fat_file_handle {
 	uint16_t dirent_offset;
 };
 
-/** \brief Structure used internally for FAT volume state.
- * Do not access directly.  Structure has no public fields. 
- */
 struct fat_vol_handle {
 	const struct block_device *dev;
 	/* FAT type: 12, 16 or 32 */

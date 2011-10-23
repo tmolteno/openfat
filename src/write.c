@@ -432,3 +432,11 @@ int fat_mkdir(struct fat_vol_handle *vol, const char *name)
 	return (ret < 0) ? ret : 0;
 }
 
+int fat_create(struct fat_vol_handle *vol, const char *name, int flags,
+		  struct fat_file_handle *file)
+{
+	int ret = _fat_dir_create_file(vol, name, FAT_ATTR_ARCHIVE, file);
+	file->flags = flags;
+	return ret;
+}
+
