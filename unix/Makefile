@@ -12,6 +12,10 @@ OBJ = $(SRC:.c=.o)
 fattest: $(OBJ) ../src/libopenfat.a
 	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
 
+autopsy: autopsy.c blockdev_file.o
+	$(CC) $(CFLAGS) $(LDFLAGS) autopsy.c blockdev_file.o -o $@ \
+			`pkg-config gtk+-2.0 --cflags --libs` -lopenfat
+
 images: fat12.img fat16.img fat32.img
 
 fat12.img:
