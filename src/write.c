@@ -255,7 +255,7 @@ int fat_write(struct fat_file_handle *h, const void *buf, int size)
 		if((sector % h->fat->sectors_per_cluster) == 0) {
 			/* Go to next cluster... */
 			uint32_t next_cluster = fat_alloc_next_cluster(h->fat, 
-						h->cur_cluster, 0);
+						h->cur_cluster, h->size == 0);
 			if(!next_cluster)
 				break;
 			h->cur_cluster = next_cluster;
