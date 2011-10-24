@@ -28,11 +28,22 @@
 
 #include "fat_core.h"
 
-static uint32_t fat_find_free_cluster(const struct fat_vol_handle *h)
+static uint32_t fat_find_free_cluster(struct fat_vol_handle *h)
 {
-	for(uint32_t i = 2; i < h->cluster_count; i++) {
-		if(_fat_get_next_cluster(h, i) == 0)
+	uint32_t i;
+
+	for(i = h->last_cluster_alloc; i < h->cluster_count; i++) {
+		if(_fat_get_next_cluster(h, i) == 0) {
+			h->last_cluster_alloc = i;
 			return i;
+		}
+	}
+
+	for(i = 2; i < h->last_cluster_alloc; i++) {
+		if(_fat_get_next_cluster(h, i) == 0) {
+			h->last_cluster_alloc = i;
+			return i;
+		}
 	}
 
 	return 0; /* No free clusters */
@@ -143,7 +154,7 @@ fat_set_next_cluster(const struct fat_vol_handle *h,
 	return ret;
 }
 
-static int32_t fat_alloc_next_cluster(const struct fat_vol_handle *h, 
+static int32_t fat_alloc_next_cluster(struct fat_vol_handle *h, 
 				uint32_t cluster, int clear)
 {
 	/* Return next if already allocated */

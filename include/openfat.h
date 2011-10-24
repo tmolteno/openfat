@@ -176,7 +176,7 @@ int fat_readdir(FatFile *dir, struct dirent *ent);
  */
 
 struct fat_file_handle {
-	const struct fat_vol_handle *fat;
+	struct fat_vol_handle *fat;
 	/* Fields from dir entry */
 	uint32_t size;
 	uint32_t first_cluster;
@@ -213,6 +213,7 @@ struct fat_vol_handle {
 		} fat12_16;
 	};
 	/* Internal state */
+	uint32_t last_cluster_alloc;
 	struct fat_file_handle cwd;
 };
 

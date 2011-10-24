@@ -56,6 +56,7 @@ int fat_vol_init(const struct block_device *dev, struct fat_vol_handle *h)
 	h->reserved_sector_count = __get_le16(&bpb->reserved_sector_count);
 	h->num_fats = bpb->num_fats;
 	h->fat_size = _bpb_fat_size(bpb);
+	h->last_cluster_alloc = 2;
 	if(h->type == FAT_TYPE_FAT32) {
 		struct bpb_fat32 *bpb32 = (void *)&_fat_sector_buf;
 		h->fat32.root_cluster = __get_le32(&bpb32->root_cluster);
