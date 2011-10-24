@@ -35,6 +35,8 @@
 
 #include "mmc.h"
 
+static volatile uint32_t time_counter;
+
 void stm32_setup(void)
 {
 	/* Setup SYSCLK */
@@ -111,33 +113,36 @@ int main(void)
 {
 	struct mmc_port spi2;
 	struct block_mbr_partition part;
-	struct block_device *bldev = (void*)&spi2;
-	struct block_device *blpart = (void*)&part;
-	struct fat_vol_handle fat;
-	struct fat_file_handle root, file;
+	struct fat_vol_handle vol;
+	struct fat_file_handle file;
 
 	stm32_setup();
 
 	mmc_init(SPI2, GPIOA, GPIO3, &spi2);
-	mbr_partition_init(&part, bldev, 0);
+	mbr_partition_init(&part, (struct block_device *)&spi2, 0);
 
-	assert(fat_vol_init(blpart, &fat) == 0);
-	printf("Fat type is FAT%d\n", fat.type);
+	assert(fat_vol_init((struct block_device *)&part, &vol) == 0);
+	printf("Fat type is FAT%d\n", vol.type);
 
-	fat_mkdir(&fat, "Directory1");
-	assert(fat_chdir(&fat, "Directory1") == 0);
-	assert(fat_open(&fat, "Message file with a long name.txt", 
-				O_CREAT | O_ASYNC, &file) == 0);
+	time_counter = 0;
+	char dirname[20];
+	char filename[20];
+	char buffer[2000];
 	for(int i = 0; i < 100; i++) {
-		char message[80];
-		sprintf(message, "Here is a message %d\n", i);
-		fat_write(&file, message, strlen(message));
+		sprintf(dirname, "Dir%d", i);
+		fat_mkdir(&vol, dirname);
+		assert(fat_chdir(&vol, dirname) == 0);
+		for(int j = 0; j < 100; j++) {
+			sprintf(filename, "File%d", j);
+			assert(fat_create(&vol, filename, O_WRONLY, &file) == 0);
+			assert(fat_write(&file, buffer, sizeof(buffer)) == sizeof(buffer));
+		}
+		assert(fat_chdir(&vol, "..") == 0);
 	}
-	fat_file_sync(&file);
-	assert(fat_chdir(&fat, "..") == 0);
+	asm("bkpt");
 
-	assert(fat_open(&fat, ".", 0, &root) == 0);
-	print_tree(&fat, &root, 0);
+	assert(fat_open(&vol, ".", 0, &file) == 0);
+	print_tree(&vol, &file, 0);
 
 	while (1) {
 	}
@@ -150,6 +155,7 @@ void sys_tick_handler()
 	static int temp32;
 
 	temp32++;
+	time_counter++;
 
 	/* we call this handler every 1ms so 1000ms = 1s on/off */
 	if (temp32 == 1000) {

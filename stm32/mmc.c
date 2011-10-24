@@ -200,7 +200,7 @@ mmc_init(uint32_t spi, uint32_t cs_port, uint16_t cs_pin, struct mmc_port *mmc)
 	/* Peripheral clocks must already be enabled.  
 	 * SPI pins must already be configured. */
 	spi_init_master(mmc->spi, 
-			SPI_CR1_BAUDRATE_FPCLK_DIV_256, 
+			SPI_CR1_BAUDRATE_FPCLK_DIV_2, 
 			SPI_CR1_CPOL_CLK_TO_1_WHEN_IDLE, 
 			SPI_CR1_CPHA_CLK_TRANSITION_2, 
 			SPI_CR1_DFF_8BIT,
