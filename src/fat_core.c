@@ -110,7 +110,7 @@ uint32_t _fat_get_next_cluster(const struct fat_vol_handle *h, uint32_t cluster)
 	return 0;
 }
 
-void _fat_file_root(const struct fat_vol_handle *fat, 
+void _fat_file_root(struct fat_vol_handle *fat, 
 		struct fat_file_handle *h)
 {
 	memset(h, 0, sizeof(*h));
@@ -127,7 +127,7 @@ void _fat_file_root(const struct fat_vol_handle *fat,
 	h->cur_cluster = h->first_cluster;
 }
 
-void _fat_file_init(const struct fat_vol_handle *fat, 
+void _fat_file_init(struct fat_vol_handle *fat, 
 		const struct fat_sdirent *dirent,
 		struct fat_file_handle *h)
 {
