@@ -21,7 +21,7 @@
 /* MMC Card interface implementation.
  */
 
-#include <libopencm3/stm32/f1/gpio.h>
+#include <libopencm3/stm32/gpio.h>
 #include <libopencm3/stm32/spi.h>
 
 #include <stdint.h>
@@ -203,7 +203,7 @@ mmc_init(uint32_t spi, uint32_t cs_port, uint16_t cs_pin, struct mmc_port *mmc)
 			SPI_CR1_BAUDRATE_FPCLK_DIV_2, 
 			SPI_CR1_CPOL_CLK_TO_1_WHEN_IDLE, 
 			SPI_CR1_CPHA_CLK_TRANSITION_2, 
-			SPI_CR1_DFF_8BIT,
+			SPI_CR1_CRCL_8BIT,
 			SPI_CR1_MSBFIRST);
 	/* Ignore the stupid NSS pin */
 	spi_enable_software_slave_management(mmc->spi);
@@ -212,8 +212,8 @@ mmc_init(uint32_t spi, uint32_t cs_port, uint16_t cs_pin, struct mmc_port *mmc)
 	spi_enable(mmc->spi);
 
 	/* SD nCS pin init */
-	gpio_set_mode(mmc->cs_port, GPIO_MODE_OUTPUT_10_MHZ, 
-			GPIO_CNF_OUTPUT_PUSHPULL, mmc->cs_pin);
+	gpio_mode_setup(mmc->cs_port, GPIO_MODE_OUTPUT, 
+			GPIO_PUPD_NONE, mmc->cs_pin);
 
 	/* Do card init ... */
 	for(int i = 0 ; i < 80; i++) spi_readwrite(mmc->spi, 0xff);
